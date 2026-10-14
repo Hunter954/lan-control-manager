@@ -141,6 +141,130 @@ test("Android relay enforces session authentication, local consent, role and rev
     p = message(phone);
     viewer.send(JSON.stringify({ type: "control", action: "front" }));
     assert.equal(JSON.parse((await p).data.toString()).action, "front");
+    // A camera-only legacy session cannot switch to screen.
+    p = message(viewer);
+    viewer.send(JSON.stringify({ type: "control", action: "screen" }));
+    assert.equal(JSON.parse((await p).data.toString()).type, "error");
+    // A session explicitly authorized for both sources supports remote selection.
+    p = message(viewer);
+    phone.send(
+      JSON.stringify({
+        type: "status",
+        mode: "camera",
+        control: false,
+        facing: "front",
+        sources: ["screen", "camera"],
+      }),
+    );
+    assert.deepEqual(JSON.parse((await p).data.toString()).sources, [
+      "screen",
+      "camera",
+    ]);
+    p = message(phone);
+    viewer.send(JSON.stringify({ type: "control", action: "screen" }));
+    assert.equal(JSON.parse((await p).data.toString()).action, "screen");
+    p = message(viewer);
+    phone.send(
+      JSON.stringify({
+        type: "status",
+        mode: "screen",
+        control: false,
+        sources: ["screen", "camera"],
+      }),
+    );
+    await p;
+    for (const action of ["front", "rear"]) {
+      p = message(phone);
+      viewer.send(JSON.stringify({ type: "control", action }));
+      assert.equal(JSON.parse((await p).data.toString()).action, action);
+    }
+    // Source scope is fixed for this connection; invalid updates never replace it.
+    p = message(phone);
+    phone.send(
+      JSON.stringify({
+        type: "status",
+        mode: "screen",
+        control: false,
+        sources: ["screen"],
+      }),
+    );
+    assert.equal(JSON.parse((await p).data.toString()).type, "error");
+    p = message(phone);
+    viewer.send(JSON.stringify({ type: "control", action: "rear" }));
+    assert.equal(JSON.parse((await p).data.toString()).action, "rear");
+    // Once sharing is stopped, source permissions cannot restart capture remotely.
+    p = message(viewer);
+    phone.send(
+      JSON.stringify({
+        type: "status",
+        mode: "stopped",
+        control: false,
+        sources: ["screen", "camera"],
+      }),
+    );
+    await p;
+    p = message(viewer);
+    viewer.send(JSON.stringify({ type: "control", action: "front" }));
+    assert.equal(JSON.parse((await p).data.toString()).type, "error");
+    p = message(viewer);
+    phone.send(
+      JSON.stringify({
+        type: "status",
+        mode: "screen",
+        control: false,
+        sources: ["screen", "camera"],
+      }),
+    );
+    await p;
+    // A separate, explicitly screen-only session cannot gain camera scope remotely.
+    const limitedInvite = await svc.createDevice({ role: "android" }, "admin");
+    const limitedIdentity = await svc.enroll(
+      { token: limitedInvite.token, hostname: "Screen only" },
+      "android",
+    );
+    const limitedUrl = `ws://127.0.0.1:${port}/api/mobile/live?device=${limitedInvite.id}`;
+    const limitedPhone = await connect(limitedUrl, {
+      Authorization: "Bearer " + limitedIdentity.token,
+    });
+    let limitedViewer: WebSocket | undefined;
+    try {
+      limitedViewer = await connect(limitedUrl, {
+        Origin: "https://lan.test",
+        Cookie: "lan_session=" + session,
+      });
+      p = message(limitedViewer);
+      limitedPhone.send(
+        JSON.stringify({
+          type: "status",
+          mode: "screen",
+          control: false,
+          sources: ["screen"],
+        }),
+      );
+      await p;
+      p = message(limitedViewer);
+      limitedViewer.send(JSON.stringify({ type: "control", action: "front" }));
+      assert.equal(JSON.parse((await p).data.toString()).type, "error");
+      p = message(limitedPhone);
+      limitedPhone.send(
+        JSON.stringify({
+          type: "status",
+          mode: "camera",
+          control: false,
+          sources: ["screen", "camera"],
+        }),
+      );
+      assert.equal(JSON.parse((await p).data.toString()).type, "error");
+      p = message(limitedViewer);
+      limitedViewer.send(JSON.stringify({ type: "control", action: "rear" }));
+      assert.equal(JSON.parse((await p).data.toString()).type, "error");
+      p = message(limitedPhone);
+      limitedViewer.send(JSON.stringify({ type: "control", action: "stop" }));
+      assert.equal(JSON.parse((await p).data.toString()).action, "stop");
+    } finally {
+      limitedViewer?.terminate();
+      limitedPhone.terminate();
+    }
     // Authorized sharing continues beyond 15 minutes while credentials remain valid.
     elapsed = 16 * 60000;
     t.mock.timers.tick(10000);

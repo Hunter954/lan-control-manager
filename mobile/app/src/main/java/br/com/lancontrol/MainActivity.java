@@ -46,13 +46,14 @@ public class MainActivity extends Activity {
         new ArrayAdapter<>(
             this,
             android.R.layout.simple_spinner_item,
-            new String[] {"Tela", "Câmera traseira", "Câmera frontal"});
+            new String[] {"Tela e câmeras", "Somente tela", "Câmera traseira", "Câmera frontal"});
     adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
     mode.setAdapter(adapter);
     layout.addView(mode);
     TextView cameraInfo = new TextView(this);
     cameraInfo.setText(
-        "Na sessão de câmera, o administrador pode alternar entre frontal e traseira.");
+        "Em Tela e câmeras, o administrador pode alternar entre tela, frontal e traseira durante"
+            + " esta sessão. A captura de tela permanece ativa até encerrar.");
     cameraInfo.setTextSize(14);
     layout.addView(cameraInfo);
     start =
@@ -62,7 +63,7 @@ public class MainActivity extends Activity {
             () -> {
               if (!paired || pendingMode != null || ShareService.current != null) return;
               pendingMode =
-                  new String[] {"screen", "rear", "front"}[mode.getSelectedItemPosition()];
+                  new String[] {"both", "screen", "rear", "front"}[mode.getSelectedItemPosition()];
               continueStart();
             });
     status = new TextView(this);
@@ -102,7 +103,7 @@ public class MainActivity extends Activity {
             mode.setEnabled(pendingMode == null && s == null);
             stop.setVisibility(s == null ? View.GONE : View.VISIBLE);
             cameraInfo.setVisibility(
-                mode.getSelectedItemPosition() == 0 && s == null ? View.GONE : View.VISIBLE);
+                mode.getSelectedItemPosition() == 1 && s == null ? View.GONE : View.VISIBLE);
             status.setText(
                 !paired
                     ? "Conectando ao painel…"
@@ -145,7 +146,7 @@ public class MainActivity extends Activity {
       requestPermissions(new String[] {android.Manifest.permission.CAMERA}, 12);
       return;
     }
-    if (pendingMode.equals("screen")) {
+    if (pendingMode.equals("screen") || pendingMode.equals("both")) {
       MediaProjectionManager manager = getSystemService(MediaProjectionManager.class);
       Intent intent =
           Build.VERSION.SDK_INT >= 34
@@ -171,10 +172,12 @@ public class MainActivity extends Activity {
   protected void onActivityResult(int request, int result, Intent data) {
     super.onActivityResult(request, result, data);
     if (request != 41) return;
-    if (result == RESULT_OK && data != null && "screen".equals(pendingMode)) {
+    if (result == RESULT_OK
+        && data != null
+        && ("screen".equals(pendingMode) || "both".equals(pendingMode))) {
       launch(
           new Intent(this, ShareService.class)
-              .putExtra("mode", "screen")
+              .putExtra("mode", pendingMode)
               .putExtra("grant", data)
               .putExtra("result", result));
     } else pendingMode = null;

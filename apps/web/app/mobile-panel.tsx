@@ -26,6 +26,7 @@ export default function MobilePanel({
     );
     ws.binaryType = "blob";
     connection.current = ws;
+    let sourceKey = "";
     ws.onmessage = (e) => {
       if (e.data instanceof Blob) {
         const next = URL.createObjectURL(
@@ -39,7 +40,12 @@ export default function MobilePanel({
           const data = JSON.parse(e.data);
           if (data.type === "status") {
             setStatus(data);
-            if (["offline", "stopped", "waiting"].includes(data.mode)) {
+            const nextSource =
+              data.mode + (data.mode === "camera" ? ":" + data.facing : "");
+            if (
+              sourceKey !== nextSource ||
+              ["offline", "stopped", "waiting"].includes(data.mode)
+            ) {
               setFrame("");
               if (imageUrl.current) {
                 URL.revokeObjectURL(imageUrl.current);
@@ -47,6 +53,10 @@ export default function MobilePanel({
               }
             }
           }
+          sourceKey =
+            data.type === "status"
+              ? data.mode + (data.mode === "camera" ? ":" + data.facing : "")
+              : sourceKey;
           if (data.type === "error") setError(data.message);
         } catch {}
       }
@@ -111,6 +121,8 @@ export default function MobilePanel({
       setBusy(false);
     }
   }
+  const active = ["screen", "camera"].includes(status.mode);
+  const sources = status.sources ?? (active ? [status.mode] : []);
   return (
     <>
       <div className="cards">
@@ -127,7 +139,7 @@ export default function MobilePanel({
               : "Baixar APK para celular/tablet"}
           </button>
           <p className="muted">
-            Versão 0.2.2 · Android 8 ou superior. Visualização de tela e
+            Versão 0.2.3 · Android 8 ou superior. Visualização de tela e
             câmeras, sem acessibilidade ou toques remotos. O app solicita
             permissões no tablet e permite encerrar a qualquer momento.
           </p>
@@ -135,15 +147,17 @@ export default function MobilePanel({
         <div className="panel">
           <h2>Iniciar a sessão</h2>
           <p>
-            No tablet, escolha Tela ou Câmera e toque Iniciar sessão. As
+            No tablet, escolha Tela e câmeras e toque Iniciar sessão. As
             permissões necessárias são solicitadas em sequência. A captura de
             tela exige autorização do Android em cada sessão. Não há limite fixo
-            de duração nem gravação.
+            de duração nem gravação. Durante essa sessão, alterne Tela, Câmera
+            frontal ou Câmera traseira aqui no painel.
           </p>
           <p className="muted">
             Se o Play Protect bloquear a instalação, não desative a proteção.
-            Registre o aviso para revisão do APK. Câmera precisa ser iniciada no
-            app. Telas de senha, bloqueio e permissões exigem ação local.
+            Registre o aviso para revisão do APK. A alternância exige autorizar
+            Tela e câmeras no app. Modos Somente tela e Câmera permitem apenas o
+            recurso escolhido. Telas protegidas e permissões exigem ação local.
             Encerrar a visualização também encerra o compartilhamento no
             dispositivo.
           </p>
@@ -267,55 +281,75 @@ export default function MobilePanel({
           )}
         </div>
         <div className="actions">
-          {[
-            ["back", "Voltar"],
-            ["home", "Início"],
-            ["recent", "Aplicativos"],
-          ].map(([action, label]) => (
-            <button
-              className="secondary"
-              key={action}
-              disabled={!status.control || status.mode !== "screen"}
-              onClick={() => control(action)}
-            >
-              {label}
-            </button>
-          ))}
+          {status.control &&
+            [
+              ["back", "Voltar"],
+              ["home", "Início"],
+              ["recent", "Aplicativos"],
+            ].map(([action, label]) => (
+              <button
+                className="secondary"
+                key={action}
+                disabled={!status.control || status.mode !== "screen"}
+                onClick={() => control(action)}
+              >
+                {label}
+              </button>
+            ))}
           <button
             className="secondary"
-            disabled={status.mode !== "camera"}
+            disabled={
+              !active || !sources.includes("screen") || status.mode === "screen"
+            }
+            onClick={() => control("screen")}
+          >
+            Tela
+          </button>
+          <button
+            className="secondary"
+            disabled={
+              !active ||
+              !sources.includes("camera") ||
+              (status.mode === "camera" && status.facing === "front")
+            }
             onClick={() => control("front")}
           >
             Câmera frontal
           </button>
           <button
             className="secondary"
-            disabled={status.mode !== "camera"}
+            disabled={
+              !active ||
+              !sources.includes("camera") ||
+              (status.mode === "camera" && status.facing === "rear")
+            }
             onClick={() => control("rear")}
           >
             Câmera traseira
           </button>
         </div>
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            control("text", { text });
-            setText("");
-          }}
-        >
-          <label>
-            Texto para um campo selecionado no tablet
-            <input
-              value={text}
-              onChange={(e) => setText(e.target.value)}
-              maxLength={256}
-              disabled={!status.control}
-            />
-          </label>
-          <button className="secondary" disabled={!status.control || !text}>
-            Enviar texto
-          </button>
-        </form>
+        {status.control && (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              control("text", { text });
+              setText("");
+            }}
+          >
+            <label>
+              Texto para um campo selecionado no tablet
+              <input
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                maxLength={256}
+                disabled={!status.control}
+              />
+            </label>
+            <button className="secondary" disabled={!status.control || !text}>
+              Enviar texto
+            </button>
+          </form>
+        )}
       </div>
     </>
   );

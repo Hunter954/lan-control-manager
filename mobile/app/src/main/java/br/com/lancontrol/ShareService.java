@@ -15,6 +15,7 @@ import java.io.ByteArrayOutputStream;
 import java.util.*;
 import okhttp3.*;
 import okio.ByteString;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class ShareService extends Service {
@@ -27,13 +28,14 @@ public class ShareService extends Service {
   WebSocket socket;
   MediaProjection projection;
   VirtualDisplay display;
-  ImageReader reader;
+  ImageReader reader, cameraReader;
+  boolean canShareScreen, canShareCamera;
   CameraDevice camera;
   CameraCaptureSession cameraSession;
   long lastFrame = 0;
   volatile boolean ending = false;
   volatile int cameraGeneration = 0;
-  int captureWidth = 0, captureHeight = 0;
+  int captureWidth = 0, captureHeight = 0, screenWidth = 0, screenHeight = 0;
 
   @Override
   public IBinder onBind(Intent intent) {
@@ -49,10 +51,18 @@ public class ShareService extends Service {
     }
     if (current != null) return START_NOT_STICKY;
     current = this;
-    mode = intent.getStringExtra("mode");
+    String requestedMode = intent.getStringExtra("mode");
+    canShareScreen = "screen".equals(requestedMode) || "both".equals(requestedMode);
+    canShareCamera = "camera".equals(requestedMode) || "both".equals(requestedMode);
+    mode = canShareScreen ? "screen" : "camera";
     facing = intent.getStringExtra("facing") == null ? "rear" : intent.getStringExtra("facing");
     controlAllowed = false;
     try {
+      if (!canShareScreen && !canShareCamera) throw new SecurityException("Invalid sharing mode");
+      if (canShareCamera
+          && checkSelfPermission(android.Manifest.permission.CAMERA)
+              != android.content.pm.PackageManager.PERMISSION_GRANTED)
+        throw new SecurityException("Camera permission required");
       if (Build.VERSION.SDK_INT >= 33
           && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
               != android.content.pm.PackageManager.PERMISSION_GRANTED)
@@ -61,19 +71,17 @@ public class ShareService extends Service {
       nm.createNotificationChannel(
           new NotificationChannel(
               "sharing", "Compartilhamento ativo", NotificationManager.IMPORTANCE_LOW));
-      if (Build.VERSION.SDK_INT >= 29)
-        startForeground(
-            9,
-            notification(),
-            mode.equals("screen")
-                ? ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION
-                : ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA);
-      else startForeground(9, notification());
+      if (Build.VERSION.SDK_INT >= 29) {
+        int types = 0;
+        if (canShareScreen) types |= ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION;
+        if (canShareCamera) types |= ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA;
+        startForeground(9, notification(), types);
+      } else startForeground(9, notification());
       worker = new HandlerThread("lan-capture");
       worker.start();
       work = new Handler(worker.getLooper());
       connect();
-      if (mode.equals("screen")) {
+      if (canShareScreen) {
         MediaProjectionManager mgr = getSystemService(MediaProjectionManager.class);
         projection =
             mgr.getMediaProjection(
@@ -97,14 +105,14 @@ public class ShareService extends Service {
         display =
             projection.createVirtualDisplay(
                 "LAN Control tela",
-                captureWidth,
-                captureHeight,
+                screenWidth,
+                screenHeight,
                 getResources().getDisplayMetrics().densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 reader.getSurface(),
                 null,
                 work);
-      } else openCamera();
+      } else work.post(() -> switchSource(facing));
     } catch (Exception e) {
       report("Não foi possível iniciar. Verifique as permissões no tablet.");
       end();
@@ -128,8 +136,11 @@ public class ShareService extends Service {
         .setContentTitle("LAN Control — compartilhamento ativo")
         .setContentText(
             mode.equals("screen")
-                ? "Tela transmitida · controle " + (controlAllowed ? "permitido" : "desativado")
-                : "Câmera " + (facing.equals("front") ? "frontal" : "traseira") + " transmitida")
+                ? "Tela transmitida" + (canShareCamera ? " · câmeras autorizadas nesta sessão" : "")
+                : "Câmera "
+                    + (facing.equals("front") ? "frontal" : "traseira")
+                    + " transmitida"
+                    + (canShareScreen ? " · captura de tela ativa" : ""))
         .setContentIntent(open)
         .setOngoing(true)
         .addAction(new Notification.Action.Builder(null, "ENCERRAR", action).build())
@@ -172,21 +183,8 @@ public class ShareService extends Service {
                           end();
                           return;
                         }
-                        if (a.equals("front") || a.equals("rear")) {
-                          if (mode.equals("camera") && !facing.equals(a)) {
-                            facing = a;
-                            work.post(
-                                () -> {
-                                  try {
-                                    closeCamera();
-                                    openCamera();
-                                    sendStatus();
-                                  } catch (Exception e) {
-                                    report("Câmera indisponível");
-                                    end();
-                                  }
-                                });
-                          }
+                        if (a.equals("screen") || a.equals("front") || a.equals("rear")) {
+                          work.post(() -> switchSource(a));
                           return;
                         }
                         // Viewing edition: remote input is not supported.
@@ -225,9 +223,15 @@ public class ShareService extends Service {
       v.put("mode", mode);
       v.put("control", controlAllowed);
       v.put("facing", facing);
-      if (captureWidth > 0) {
-        v.put("width", captureWidth);
-        v.put("height", captureHeight);
+      JSONArray sources = new JSONArray();
+      if (canShareScreen) sources.put("screen");
+      if (canShareCamera) sources.put("camera");
+      v.put("sources", sources);
+      int width = mode.equals("screen") ? screenWidth : captureWidth;
+      int height = mode.equals("screen") ? screenHeight : captureHeight;
+      if (width > 0 && height > 0) {
+        v.put("width", width);
+        v.put("height", height);
       }
       v.put("message", message);
       socket.send(v.toString());
@@ -242,24 +246,24 @@ public class ShareService extends Service {
 
   void makeReader(int realW, int realH) {
     float ratio = Math.min(1f, 1024f / Math.max(realW, realH));
-    captureWidth = Math.max(1, (int) (realW * ratio));
-    captureHeight = Math.max(1, (int) (realH * ratio));
-    reader = ImageReader.newInstance(captureWidth, captureHeight, PixelFormat.RGBA_8888, 2);
+    screenWidth = Math.max(1, (int) (realW * ratio));
+    screenHeight = Math.max(1, (int) (realH * ratio));
+    reader = ImageReader.newInstance(screenWidth, screenHeight, PixelFormat.RGBA_8888, 2);
     reader.setOnImageAvailableListener(
         r -> {
           Image image = null;
           try {
             image = r.acquireLatestImage();
-            if (image == null || !frameReady()) return;
+            if (image == null || !mode.equals("screen") || !frameReady()) return;
             Image.Plane p = image.getPlanes()[0];
-            int pad = p.getRowStride() - p.getPixelStride() * captureWidth;
+            int pad = p.getRowStride() - p.getPixelStride() * r.getWidth();
             Bitmap raw =
                 Bitmap.createBitmap(
-                    captureWidth + pad / p.getPixelStride(),
-                    captureHeight,
+                    r.getWidth() + pad / p.getPixelStride(),
+                    r.getHeight(),
                     Bitmap.Config.ARGB_8888);
             raw.copyPixelsFromBuffer(p.getBuffer());
-            Bitmap crop = Bitmap.createBitmap(raw, 0, 0, captureWidth, captureHeight);
+            Bitmap crop = Bitmap.createBitmap(raw, 0, 0, r.getWidth(), r.getHeight());
             ByteArrayOutputStream out = new ByteArrayOutputStream();
             crop.compress(Bitmap.CompressFormat.JPEG, 55, out);
             sendFrame(out.toByteArray());
@@ -279,7 +283,7 @@ public class ShareService extends Service {
     ImageReader old = reader;
     makeReader(w, h);
     display.setSurface(reader.getSurface());
-    display.resize(captureWidth, captureHeight, getResources().getDisplayMetrics().densityDpi);
+    display.resize(screenWidth, screenHeight, getResources().getDisplayMetrics().densityDpi);
     if (old != null) old.close();
   }
 
@@ -295,7 +299,38 @@ public class ShareService extends Service {
     if (socket != null && bytes.length < 512000) socket.send(ByteString.of(bytes));
   }
 
+  void switchSource(String action) {
+    if (ending) return;
+    try {
+      if (action.equals("screen")) {
+        if (!canShareScreen || projection == null || display == null) return;
+        if (mode.equals("screen")) return;
+        closeCamera();
+        mode = "screen";
+        message = "Tela transmitida";
+      } else {
+        if (!canShareCamera || !(action.equals("front") || action.equals("rear"))) return;
+        if (mode.equals("camera")
+            && facing.equals(action)
+            && (camera != null || cameraReader != null)) return;
+        closeCamera();
+        mode = "camera";
+        facing = action;
+        captureWidth = captureHeight = 0;
+        message = "Abrindo câmera " + (facing.equals("front") ? "frontal" : "traseira");
+      }
+      lastFrame = 0;
+      getSystemService(NotificationManager.class).notify(9, notification());
+      sendStatus();
+      if (mode.equals("camera")) openCamera();
+    } catch (Exception e) {
+      report("Não foi possível alternar a fonte. Inicie nova sessão no tablet.");
+      main.post(() -> end());
+    }
+  }
+
   void openCamera() throws Exception {
+    if (ending || !canShareCamera || !mode.equals("camera")) return;
     final int generation = ++cameraGeneration;
     CameraManager cm = getSystemService(CameraManager.class);
     String selected = null;
@@ -326,13 +361,17 @@ public class ShareService extends Service {
     captureWidth = chosen.getWidth();
     captureHeight = chosen.getHeight();
     Integer orientation = info.get(CameraCharacteristics.SENSOR_ORIENTATION);
-    reader = ImageReader.newInstance(captureWidth, captureHeight, ImageFormat.JPEG, 2);
-    reader.setOnImageAvailableListener(
+    cameraReader = ImageReader.newInstance(captureWidth, captureHeight, ImageFormat.JPEG, 2);
+    final ImageReader sessionReader = cameraReader;
+    sessionReader.setOnImageAvailableListener(
         r -> {
           Image image = null;
           try {
             image = r.acquireLatestImage();
-            if (image == null || !frameReady()) return;
+            if (image == null
+                || generation != cameraGeneration
+                || !mode.equals("camera")
+                || !frameReady()) return;
             java.nio.ByteBuffer b = image.getPlanes()[0].getBuffer();
             byte[] bytes = new byte[b.remaining()];
             b.get(bytes);
@@ -356,10 +395,10 @@ public class ShareService extends Service {
             try {
               CaptureRequest.Builder request =
                   c.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW);
-              request.addTarget(reader.getSurface());
+              request.addTarget(sessionReader.getSurface());
               request.set(CaptureRequest.JPEG_ORIENTATION, orientation == null ? 0 : orientation);
               c.createCaptureSession(
-                  Collections.singletonList(reader.getSurface()),
+                  Collections.singletonList(sessionReader.getSurface()),
                   new CameraCaptureSession.StateCallback() {
                     @Override
                     public void onConfigured(CameraCaptureSession session) {
@@ -370,20 +409,25 @@ public class ShareService extends Service {
                       cameraSession = session;
                       try {
                         session.setRepeatingRequest(request.build(), null, work);
+                        message =
+                            "Câmera "
+                                + (facing.equals("front") ? "frontal" : "traseira")
+                                + " transmitida";
                         sendStatus();
                       } catch (Exception e) {
-                        main.post(() -> end());
+                        if (!ending && generation == cameraGeneration) main.post(() -> end());
                       }
                     }
 
                     @Override
                     public void onConfigureFailed(CameraCaptureSession s) {
-                      main.post(() -> end());
+                      s.close();
+                      if (!ending && generation == cameraGeneration) main.post(() -> end());
                     }
                   },
                   work);
             } catch (Exception e) {
-              main.post(() -> end());
+              if (!ending && generation == cameraGeneration) main.post(() -> end());
             }
           }
 
@@ -413,13 +457,17 @@ public class ShareService extends Service {
       camera.close();
       camera = null;
     }
-    if (reader != null) {
-      reader.close();
-      reader = null;
+    if (cameraReader != null) {
+      cameraReader.close();
+      cameraReader = null;
     }
   }
 
   public void end() {
+    if (Looper.myLooper() != Looper.getMainLooper()) {
+      main.post(() -> end());
+      return;
+    }
     if (ending) return;
     ending = true;
     mode = "stopped";
@@ -429,16 +477,25 @@ public class ShareService extends Service {
       socket.close(1000, "Encerrado no dispositivo");
       socket = null;
     }
-    if (display != null) {
-      display.release();
-      display = null;
-    }
-    if (projection != null) {
-      projection.stop();
-      projection = null;
-    }
-    closeCamera();
-    if (worker != null) worker.quitSafely();
+    Runnable cleanup =
+        () -> {
+          if (display != null) {
+            display.release();
+            display = null;
+          }
+          if (projection != null) {
+            projection.stop();
+            projection = null;
+          }
+          closeCamera();
+          if (reader != null) {
+            reader.close();
+            reader = null;
+          }
+          if (worker != null) worker.quitSafely();
+        };
+    if (work != null) work.post(cleanup);
+    else cleanup.run();
     main.removeCallbacksAndMessages(null);
     current = null;
     stopForeground(STOP_FOREGROUND_REMOVE);

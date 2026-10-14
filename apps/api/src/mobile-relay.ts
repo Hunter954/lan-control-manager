@@ -21,7 +21,15 @@ const controlSchema = z.discriminatedUnion("action", [
   }),
   z.object({
     type: z.literal("control"),
-    action: z.enum(["back", "home", "recent", "stop", "front", "rear"]),
+    action: z.enum([
+      "back",
+      "home",
+      "recent",
+      "stop",
+      "screen",
+      "front",
+      "rear",
+    ]),
   }),
   z.object({
     type: z.literal("control"),
@@ -39,7 +47,10 @@ export function attachMobileRelay(
     maxPayload: 512 * 1024,
     perMessageDeflate: false,
   });
-  const phones = new Map<string, { socket: WebSocket; status: any }>(),
+  const phones = new Map<
+      string,
+      { socket: WebSocket; status: any; sources?: ("screen" | "camera")[] }
+    >(),
     viewers = new Map<string, WebSocket>();
   const connections = new Set<WebSocket>();
   server.on("upgrade", (req, socket, head) => {
@@ -164,12 +175,48 @@ export function attachMobileRelay(
                     mode: z.enum(["screen", "camera", "waiting", "stopped"]),
                     control: z.boolean(),
                     facing: z.enum(["front", "rear"]).optional(),
+                    sources: z
+                      .array(z.enum(["screen", "camera"]))
+                      .min(1)
+                      .max(2)
+                      .refine(
+                        (sources) => new Set(sources).size === sources.length,
+                      )
+                      .optional(),
                     width: z.number().int().positive().max(10000).optional(),
                     height: z.number().int().positive().max(10000).optional(),
                     message: z.string().max(200).optional(),
                   })
+                  .refine(
+                    (status) =>
+                      !status.sources ||
+                      !["screen", "camera"].includes(status.mode) ||
+                      status.sources.includes(
+                        status.mode as "screen" | "camera",
+                      ),
+                  )
                   .parse(msg);
-                phones.get(id)!.status = status;
+                const phone = phones.get(id)!;
+                if (status.sources) {
+                  if (
+                    phone.sources &&
+                    (phone.sources.length !== status.sources.length ||
+                      !status.sources.every((source) =>
+                        phone.sources!.includes(source),
+                      ))
+                  )
+                    throw new Error();
+                  phone.sources ??= status.sources;
+                }
+                if (phone.sources) {
+                  if (
+                    ["screen", "camera"].includes(status.mode) &&
+                    !phone.sources.includes(status.mode as "screen" | "camera")
+                  )
+                    throw new Error();
+                  status.sources = phone.sources;
+                }
+                phone.status = status;
                 send(viewers.get(id), status);
               }
               return;
@@ -190,12 +237,18 @@ export function attachMobileRelay(
               });
               return;
             }
-            if (
-              command.action !== "stop" &&
-              (command.action === "front" || command.action === "rear"
-                ? phone.status.mode !== "camera"
-                : phone.status.mode !== "screen" || !phone.status.control)
-            ) {
+            const active = ["screen", "camera"].includes(phone.status.mode);
+            const sources =
+              phone.status.sources ?? (active ? [phone.status.mode] : []);
+            const allowed =
+              command.action === "stop" ||
+              (active &&
+                (command.action === "screen"
+                  ? sources.includes("screen")
+                  : command.action === "front" || command.action === "rear"
+                    ? sources.includes("camera")
+                    : phone.status.mode === "screen" && phone.status.control));
+            if (!allowed) {
               send(ws, {
                 type: "error",
                 message: "Recurso não autorizado no tablet para esta sessão.",
