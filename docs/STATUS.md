@@ -40,3 +40,7 @@ Verificação final: build com webpack aprovado após falha interna de cache Tur
 ## Atualização 0.1.1 — instalador sem digitação
 
 Download autenticado de EXE com convite e endereço embutidos, válido por 48 horas e uso único. Nome Windows/MAC automáticos; leitura apenas de nome e versão do HandyCafe no registro de desinstalação. Instalação com confirmação e UAC, serviço automático e entrada em Aplicativos do Windows. Build do EXE e protocolo testados; execução Windows real, Authenticode e importação de nomes personalizados do HandyCafe pendentes.
+
+## Atualização 0.2.0 — Android
+
+APK nativo com pareamento embutido, token Android Keystore, captura de tela MediaProjection, câmeras Camera2 e controle por acessibilidade explicitamente habilitado. Painel separado Celulares e tablets; WebSocket autenticado por dispositivo/sessão 2FA; JPEG em memória, até aproximadamente 4 fps, sem gravação. Sessões até 15 minutos, botão/notificação de parada e revogação. Build e assinatura validados localmente, testes de protocolo aprovados; captura/gestos/câmeras reais e comportamento dos fabricantes precisam do tablet piloto. Áudio, arquivos e controle de telas de segurança não incluídos.

@@ -34,3 +34,7 @@ O instalador Windows pode ser baixado na seção Instalação depois do login. O
 ## Instalação simplificada
 
 Instalação → Baixar instalador Windows (.exe) → executar no PC → confirmar. Convite embutido de uso único por 48 horas. Nome do Windows e MAC obtidos automaticamente; detecção de HandyCafe sem alterar configuração. Não importamos ainda apelidos personalizados do HandyCafe. Cada arquivo instala uma única estação. O painel não solicita senha de administrador na máquina cliente. O Windows solicita sua autorização local para registrar o serviço.
+
+## Android 0.2.0
+
+Celulares e tablets → Baixar APK personalizado → instalar e abrir no Android. No dispositivo, autorize tela/câmera e, opcionalmente, acessibilidade + controle para cada sessão. Painel recebe tela ou câmera e permite gestos, navegação, texto e alternância frontal/traseira autorizada. Sem gravação, boot oculto, áudio ou acesso a arquivos. Sessões de até 15 minutos. Veja docs/ANDROID.md e valide primeiro no tablet piloto.

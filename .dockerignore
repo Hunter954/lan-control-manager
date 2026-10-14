@@ -7,3 +7,6 @@ artifacts
 **/obj
 .env
 .env.local
+**/.gradle
+mobile/**/build
+mobile/local.properties

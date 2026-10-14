@@ -170,7 +170,7 @@ export class Service {
     const t = token();
     const d = (
       await this.db.query(
-        "UPDATE devices SET token_hash=$1,enrollment_hash=NULL,enrollment_expires=NULL,name=CASE WHEN auto_name AND $3::text IS NOT NULL THEN $3 ELSE name END,name_source=CASE WHEN auto_name AND $3::text IS NOT NULL THEN 'windows' ELSE name_source END,mac=COALESCE($4,mac) WHERE enrollment_hash=$2 AND enrollment_expires>now() AND NOT revoked RETURNING id,role,name",
+        "UPDATE devices SET token_hash=$1,enrollment_hash=NULL,enrollment_expires=NULL,name=CASE WHEN auto_name AND $3::text IS NOT NULL THEN $3 ELSE name END,name_source=CASE WHEN auto_name AND $3::text IS NOT NULL THEN CASE WHEN role='android' THEN 'android' ELSE 'windows' END ELSE name_source END,mac=COALESCE($4,mac) WHERE enrollment_hash=$2 AND enrollment_expires>now() AND NOT revoked RETURNING id,role,name",
         [
           digest(t),
           digest(identity.token),
@@ -187,7 +187,7 @@ export class Service {
     const v = z
       .object({
         name: str.optional(),
-        role: z.enum(["station", "gateway"]).default("station"),
+        role: z.enum(["station", "gateway", "android"]).default("station"),
       })
       .parse(b);
     const t = token(),

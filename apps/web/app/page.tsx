@@ -1,4 +1,5 @@
 "use client";
+import MobilePanel from "./mobile-panel";
 import { useEffect, useState, FormEvent } from "react";
 type Device = {
   id: string;
@@ -215,6 +216,7 @@ export default function Page() {
           ["integrations", "Integrações"],
           ["audit", "Auditoria"],
           ["install", "Instalação"],
+          ["mobile", "Celulares e tablets"],
         ].map(([id, l]) => (
           <button
             key={id}
@@ -252,6 +254,7 @@ export default function Page() {
                   integrations: "Credenciais e integrações",
                   audit: "Histórico de auditoria",
                   install: "Instalar e conectar",
+                  mobile: "Celulares e tablets",
                 }[tab]
               }
             </h1>
@@ -313,117 +316,119 @@ export default function Page() {
               </div>
             )}
             <div className="cards">
-              {data.devices.map((d: Device) => (
-                <article key={d.id}>
-                  <div className="stationtop">
-                    <div className="pc">
-                      {d.role === "gateway" ? "GW" : "PC"}
+              {data.devices
+                .filter((d: Device) => d.role !== "android")
+                .map((d: Device) => (
+                  <article key={d.id}>
+                    <div className="stationtop">
+                      <div className="pc">
+                        {d.role === "gateway" ? "GW" : "PC"}
+                      </div>
+                      <span className={"pill " + (online(d) ? "green" : "")}>
+                        {d.revoked
+                          ? "Revogado"
+                          : online(d)
+                            ? "Online"
+                            : "Offline"}
+                      </span>
                     </div>
-                    <span className={"pill " + (online(d) ? "green" : "")}>
-                      {d.revoked
-                        ? "Revogado"
-                        : online(d)
-                          ? "Online"
-                          : "Offline"}
-                    </span>
-                  </div>
-                  <h2>{d.name}</h2>
-                  <p className="muted">
-                    {d.role === "gateway"
-                      ? "Gateway local"
-                      : (d.telemetry.os ?? "Aguardando instalação")}{" "}
-                    · {d.telemetry.version ?? "—"}
-                  </p>
-                  {d.telemetry.handyCafeInstalled && (
+                    <h2>{d.name}</h2>
                     <p className="muted">
-                      HandyCafe detectado {d.telemetry.handyCafeVersion ?? ""}
+                      {d.role === "gateway"
+                        ? "Gateway local"
+                        : (d.telemetry.os ?? "Aguardando instalação")}{" "}
+                      · {d.telemetry.version ?? "—"}
                     </p>
-                  )}
-                  <dl>
-                    <dt>Bloqueio</dt>
-                    <dd>{d.telemetry.lockState ?? "unknown"}</dd>
-                    <dt>Deep Freeze</dt>
-                    <dd>{d.telemetry.deepFreezeState ?? "unknown"}</dd>
-                    <dt>Último contato</dt>
-                    <dd>
-                      {d.last_seen
-                        ? new Date(d.last_seen).toLocaleString("pt-BR")
-                        : "Nenhum"}
-                    </dd>
-                  </dl>
-                  <div className="actions">
-                    {Object.entries(labels).map(([kind, label]) => (
-                      <button
-                        key={kind}
-                        className="secondary"
-                        disabled={
-                          busy ||
-                          !d.capabilities.includes(kind) ||
-                          d.revoked ||
-                          !online(d)
-                        }
-                        title={
-                          !d.capabilities.includes(kind)
-                            ? "Integração pendente de validação"
-                            : label
-                        }
-                        onClick={() =>
-                          run(async () => {
-                            const payload: any = {};
-                            if (kind === "wol") {
-                              const mac = prompt(
-                                "MAC do PC na mesma rede (AA:BB:CC:DD:EE:FF)",
+                    {d.telemetry.handyCafeInstalled && (
+                      <p className="muted">
+                        HandyCafe detectado {d.telemetry.handyCafeVersion ?? ""}
+                      </p>
+                    )}
+                    <dl>
+                      <dt>Bloqueio</dt>
+                      <dd>{d.telemetry.lockState ?? "unknown"}</dd>
+                      <dt>Deep Freeze</dt>
+                      <dd>{d.telemetry.deepFreezeState ?? "unknown"}</dd>
+                      <dt>Último contato</dt>
+                      <dd>
+                        {d.last_seen
+                          ? new Date(d.last_seen).toLocaleString("pt-BR")
+                          : "Nenhum"}
+                      </dd>
+                    </dl>
+                    <div className="actions">
+                      {Object.entries(labels).map(([kind, label]) => (
+                        <button
+                          key={kind}
+                          className="secondary"
+                          disabled={
+                            busy ||
+                            !d.capabilities.includes(kind) ||
+                            d.revoked ||
+                            !online(d)
+                          }
+                          title={
+                            !d.capabilities.includes(kind)
+                              ? "Integração pendente de validação"
+                              : label
+                          }
+                          onClick={() =>
+                            run(async () => {
+                              const payload: any = {};
+                              if (kind === "wol") {
+                                const mac = prompt(
+                                  "MAC do PC na mesma rede (AA:BB:CC:DD:EE:FF)",
+                                );
+                                if (!mac) return;
+                                payload.mac = mac;
+                              }
+                              if (kind === "steam_update") {
+                                const id = prompt(
+                                  "Steam App ID autorizado neste agente",
+                                );
+                                if (!id) return;
+                                payload.appId = Number(id);
+                              }
+                              if (
+                                ["reboot", "shutdown"].includes(kind) &&
+                                !confirm(`${label} ${d.name}?`)
+                              )
+                                return;
+                              await api("/commands", {
+                                deviceId: d.id,
+                                kind,
+                                payload,
+                              });
+                              await reload();
+                              setMessage(
+                                "Comando enfileirado. Acompanhe a confirmação em Comandos.",
                               );
-                              if (!mac) return;
-                              payload.mac = mac;
-                            }
-                            if (kind === "steam_update") {
-                              const id = prompt(
-                                "Steam App ID autorizado neste agente",
-                              );
-                              if (!id) return;
-                              payload.appId = Number(id);
-                            }
-                            if (
-                              ["reboot", "shutdown"].includes(kind) &&
-                              !confirm(`${label} ${d.name}?`)
+                            })
+                          }
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      className="link danger"
+                      onClick={() =>
+                        run(async () => {
+                          if (
+                            !confirm(
+                              "Revogar permanentemente o acesso deste agente?",
                             )
-                              return;
-                            await api("/commands", {
-                              deviceId: d.id,
-                              kind,
-                              payload,
-                            });
-                            await reload();
-                            setMessage(
-                              "Comando enfileirado. Acompanhe a confirmação em Comandos.",
-                            );
-                          })
-                        }
-                      >
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  <button
-                    className="link danger"
-                    onClick={() =>
-                      run(async () => {
-                        if (
-                          !confirm(
-                            "Revogar permanentemente o acesso deste agente?",
                           )
-                        )
-                          return;
-                        await api("/device/revoke", { id: d.id });
-                        await reload();
-                      })
-                    }
-                  >
-                    Revogar acesso
-                  </button>
-                </article>
-              ))}
+                            return;
+                          await api("/device/revoke", { id: d.id });
+                          await reload();
+                        })
+                      }
+                    >
+                      Revogar acesso
+                    </button>
+                  </article>
+                ))}
             </div>
           </>
         )}
@@ -658,6 +663,12 @@ export default function Page() {
               </table>
             </div>
           </>
+        )}
+        {tab === "mobile" && (
+          <MobilePanel
+            devices={data.devices.filter((d: any) => d.role === "android")}
+            reload={reload}
+          />
         )}
         {tab === "install" && (
           <>

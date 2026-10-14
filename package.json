@@ -1,6 +1,6 @@
 {
   "name": "lan-control-manager",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "private": true,
   "scripts": {
     "build": "tsc -p apps/api && next build apps/web --webpack",
@@ -22,6 +22,7 @@
     "react-dom": "^19.2.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
+    "ws": "^8.22.0",
     "zod": "^4.1.0"
   },
   "devDependencies": {
@@ -31,6 +32,7 @@
     "@types/pg": "^8.15.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "@types/ws": "^8.18.2",
     "prettier": "^3.9.10",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0"

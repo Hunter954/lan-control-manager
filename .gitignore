@@ -8,3 +8,6 @@ obj/
 artifacts/
 *.zip
 *.tsbuildinfo
+.gradle/
+mobile/**/build/
+mobile/local.properties

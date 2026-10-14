@@ -19,3 +19,5 @@ Publicação concluída com status SUCCESS em 14/10/2026. Painel: https://lan-co
 ## Estado aplicado
 
 Serviço lan-control-manager segue a branch main automaticamente. PostgreSQL associado via referência de variável; volume lan-control-data montado em /data; variáveis de criptografia e bootstrap geradas aleatoriamente no Railway. Migrações aplicadas na inicialização. Pacote Windows compilado e copiado para o volume; download exige sessão administrativa. Nenhum segredo foi incluído no repositório.
+
+Android: Docker compila mobile/ com SDK 35 e Gradle 8.13; copia template unsigned, zipalign e apksigner para o runtime com Java 17. /data/releases contém o template; /data/android-signing conserva a chave privada gerada no primeiro download. Preserve essa pasta nos backups. APKs personalizados são temporários e apagados após download, não publicados no repositório.

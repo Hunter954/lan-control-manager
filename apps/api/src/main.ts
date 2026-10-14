@@ -6,6 +6,8 @@ import helmet from "helmet";
 import next from "next";
 import { existsSync, createReadStream, statSync } from "node:fs";
 import { installerTrailer } from "./installer";
+import { personalizeApk } from "./android-apk";
+import { attachMobileRelay } from "./mobile-relay";
 import { resolve } from "node:path";
 import { connect, DB } from "./db";
 import { Service, HttpError } from "./service";
@@ -69,6 +71,8 @@ export async function start(db: DB) {
         return res.json(await svc.enroll(b, ip));
       if (p.startsWith("/agent/")) {
         const d = await svc.device(bearer);
+        if (p === "/agent/info" && req.method === "GET")
+          return res.json({ id: d.id, role: d.role, name: d.name });
         if (p === "/agent/heartbeat" && req.method === "POST")
           return res.json(await svc.heartbeat(d, b));
         if (p === "/agent/poll" && req.method === "GET")
@@ -116,6 +120,7 @@ export async function start(db: DB) {
           "UPDATE commands SET status='expired',lease_hash=NULL WHERE device_id=$1 AND status IN ('queued','leased')",
           [String(b.id)],
         );
+        mobileRelay.disconnect(String(b.id));
         await svc.audit(a.username, "device.revoked", String(b.id));
         return res.json({ ok: true });
       }
@@ -145,7 +150,36 @@ export async function start(db: DB) {
               .join("\n"),
         );
       }
+      if (p === "/mobile/apk" && req.method === "POST") {
+        const dataDir = process.env.DATA_DIR ?? "/data",
+          template = resolve(
+            dataDir,
+            "releases/LANControl-Android-unsigned.apk",
+          );
+        if (!existsSync(template))
+          throw new HttpError(
+            409,
+            "APK ainda não publicado. Aguarde o deploy.",
+          );
+        const invite = await svc.createDevice({ role: "android" }, a.username);
+        const apk = await personalizeApk(
+          template,
+          {
+            serverUrl: origin,
+            token: invite.token,
+            expiresAt: invite.expiresAt,
+          },
+          dataDir,
+        );
+        await svc.audit(a.username, "android.apk.download", invite.id);
+        res.on("close", () => apk.cleanup());
+        return res.download(apk.path, "LANControl-Android.apk", () =>
+          apk.cleanup(),
+        );
+      }
       if (p === "/installer" && req.method === "POST") {
+        if (!["station", "gateway"].includes(b.role ?? "station"))
+          throw new HttpError(400, "Tipo de instalador inválido");
         const path = resolve(
           process.env.DATA_DIR ?? "/data",
           "releases/LANControl.Installer.exe",
@@ -203,6 +237,7 @@ export async function start(db: DB) {
   });
   await web.prepare();
   app.use((req: Request, res: Response) => web.getRequestHandler()(req, res));
+  const mobileRelay = attachMobileRelay(app.getHttpServer(), svc, origin);
   await app.listen(Number(process.env.PORT ?? 3000), "0.0.0.0");
   let working = false;
   const timer = setInterval(async () => {
@@ -220,6 +255,7 @@ export async function start(db: DB) {
     app,
     close: async () => {
       clearInterval(timer);
+      mobileRelay.close();
       await app.close();
     },
   };
