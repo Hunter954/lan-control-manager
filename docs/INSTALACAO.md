@@ -1,20 +1,24 @@
-# Instalação Windows x64
+# Instalação simplificada — Windows x64
 
-## Pacote entregue
+No painel autenticado, abra Instalação e clique Baixar instalador Windows (.exe). Cada download gera um convite diferente, de uso único, válido por 48 horas. Execute LANControl-Instalar.exe no PC desejado, autorize o Windows e confirme a instalação. O arquivo já contém o endereço deste painel e o convite; não há ZIP para extrair nem código para copiar. O próprio instalador identifica o nome do Windows e o MAC de uma interface ativa. O agente aparece no painel automaticamente.
 
-LANControl-Setup.zip contém Install.ps1, Uninstall.ps1 e bin/LANControl.Agent.exe + bin/LANControl.Updater.exe. Executáveis autocontidos .NET 10: não exigem instalar runtime .NET separadamente. Compilação cruzada concluída; execução/instalação real Windows não testada neste ambiente Linux. Instalador de um clique MSI/EXE e assinatura Authenticode ficam pendentes; o pacote atual é um instalador PowerShell interativo como administrador.
+Baixe um novo arquivo para cada PC. Não reutilize o mesmo arquivo em vários computadores. Uma instalação já existente é detectada; o instalador não sobrescreve seu agente nem reaproveita sua identidade. Convites já consumidos, expirados ou revogados não conectam outra máquina. Se uma instalação falhar após consumo do convite, baixe outro arquivo para tentar novamente.
 
-1. Publique o painel e configure administrador/2FA.
-2. Autorize a instalação e abra uma janela de manutenção pelo mecanismo oficial do Deep Freeze. Instale quando a alteração puder persistir; o software não desativa nem contorna Deep Freeze.
-3. Crie convite no painel com nome e tipo (estação ou gateway). Cada convite vale uma instalação por 30 minutos.
-4. Baixe o pacote de uma fonte confiável, confira o SHA256 contra o arquivo de hashes entregue, extraia e execute Install.ps1 no PowerShell como administrador. Use a política de execução aprovada pela organização; não é fornecido bypass de política.
-5. Informe endereço HTTPS do painel e convite. O instalador grava em Program Files/LANControl, registra serviço automático LANControlAgent e tarefa SYSTEM LANControlUpdater. Token de máquina é protegido por DPAPI LocalMachine. Configuração e journal ficam acessíveis apenas a SYSTEM/Administradores. Não copie config.json entre PCs.
-6. Verifique Online e a operação inventário. Reinício/desligamento são agendados para 30 segundos após recebimento. Faça esse teste fora de atendimento, sem dados não salvos.
-7. Confirme que binários, configuração, registro do serviço e ProgramData/LANControl sobrevivem ao reboot e ao congelamento. Se necessário, configure área persistente/ThawSpace oficialmente; o caminho padrão não cria essa área. Não habilite OTA se as alterações serão revertidas pelo Deep Freeze.
+Para gateway, use o botão separado Baixar instalador do gateway no painel, em um computador que ficará ligado na rede local.
+
+O executável é self-contained .NET 10 e traz os dois binários do agente. Não exige runtime .NET instalado. A autorização UAC do Windows permanece obrigatória. Sem certificado Authenticode nesta entrega; assinatura do instalador e execução real no PC piloto ainda precisam de validação. Não há desativação da proteção do Deep Freeze: instale em uma janela descongelada autorizada e confirme persistência após reinício.
+
+Nome automático: hostname do Windows. HandyCafe é detectado por DisplayName/DisplayVersion no cadastro de programas instalados, sem ler senhas, alterar configurações ou comunicar com seu servidor. Um nome personalizado no HandyCafe não é importado nesta versão. Confirme versão/exportação ou API oficial antes dessa integração.
+
+O installer base é compilado no Docker. A API adiciona um pequeno frame JSON ao fim do executável (uso autorizado, 48 horas, sessão administrativa, Cache-Control no-store). O frame contém serverUrl, token e expiresAt; o instalador só aceita o domínio deste painel. O arquivo personalizado não deve ser publicado no GitHub ou compartilhado publicamente. Personalização por overlay não é compatível com assinatura Authenticode prévia do arquivo completo; provisionar assinatura do download final ou formato apropriado antes de distribuir em produção com assinatura.
+
+Para remover, utilize LAN Control Agent em Aplicativos do Windows. Serviço e tarefa são removidos; arquivos e dados locais permanecem para remoção autorizada. Revogue também a estação no painel.
+
+## Manutenção avançada
 
 ## Gateway
 
-Convite tipo gateway no mesmo pacote. Deve ficar ligado na mesma rede física das estações. BroadcastAddress padrão 255.255.255.255, configurável localmente em config.json. Habilite Wake-on-LAN no BIOS/UEFI, NIC e driver. Teste com o PC desligado e depois confirme Online. Um envio UDP bem sucedido não prova que o PC ligou. Gateway desligado não envia WOL.
+Instalador personalizado de gateway pelo botão separado do painel. Deve ficar ligado na mesma rede física das estações. BroadcastAddress padrão 255.255.255.255, configurável localmente em config.json. Habilite Wake-on-LAN no BIOS/UEFI, NIC e driver. Teste com o PC desligado e depois confirme Online. Um envio UDP bem sucedido não prova que o PC ligou. Gateway desligado não envia WOL.
 
 ## SteamCMD experimental, opt-in local
 

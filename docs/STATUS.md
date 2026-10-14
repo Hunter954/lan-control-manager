@@ -36,3 +36,7 @@ Verificação em produção: /health responde 200; painel/login responde 200; /a
 A entrega é uma base executável publicada, ainda não o sistema completo validado nos PCs da LAN house. Credenciais armazenadas no painel não tornam as integrações funcionais. Offline/unknown não são estados físicos confirmados. Operações de WOL/OTA/reboot registram o pedido aceito; confirmar resultado em heartbeat e/ou inspeção local.
 
 Verificação final: build com webpack aprovado após falha interna de cache Turbopack no ambiente. Reexecutados os seis testes: 6/6 aprovados. Binários finais recompilados após ajustes de opt-in/persistência do atualizador. Pacote de código contém docs/INSTALLER-SHA256.txt para conferir o ZIP Windows.
+
+## Atualização 0.1.1 — instalador sem digitação
+
+Download autenticado de EXE com convite e endereço embutidos, válido por 48 horas e uso único. Nome Windows/MAC automáticos; leitura apenas de nome e versão do HandyCafe no registro de desinstalação. Instalação com confirmação e UAC, serviço automático e entrada em Aplicativos do Windows. Build do EXE e protocolo testados; execução Windows real, Authenticode e importação de nomes personalizados do HandyCafe pendentes.

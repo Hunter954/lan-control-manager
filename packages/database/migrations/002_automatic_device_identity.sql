@@ -1,0 +1,3 @@
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS auto_name boolean NOT NULL DEFAULT false;
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS name_source text NOT NULL DEFAULT 'manual';
+ALTER TABLE devices ADD COLUMN IF NOT EXISTS mac text;

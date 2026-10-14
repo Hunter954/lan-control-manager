@@ -30,7 +30,6 @@ export default function Page() {
       credentials: [],
     }),
     [message, setMessage] = useState(""),
-    [invite, setInvite] = useState<any>(null),
     [setup, setSetup] = useState(false),
     [secret, setSecret] = useState(""),
     [busy, setBusy] = useState(false);
@@ -335,6 +334,11 @@ export default function Page() {
                       : (d.telemetry.os ?? "Aguardando instalação")}{" "}
                     · {d.telemetry.version ?? "—"}
                   </p>
+                  {d.telemetry.handyCafeInstalled && (
+                    <p className="muted">
+                      HandyCafe detectado {d.telemetry.handyCafeVersion ?? ""}
+                    </p>
+                  )}
                   <dl>
                     <dt>Bloqueio</dt>
                     <dd>{d.telemetry.lockState ?? "unknown"}</dd>
@@ -658,78 +662,92 @@ export default function Page() {
         {tab === "install" && (
           <>
             <div className="cards">
-              <form
-                className="panel"
-                onSubmit={(e) => {
-                  const b = values(e);
-                  run(async () => {
-                    setInvite(await api("/devices", b));
-                    await reload();
-                  });
-                }}
-              >
-                <h2>1. Criar convite</h2>
-                <label>
-                  Nome
-                  <input name="name" placeholder="PC-01" required />
-                </label>
-                <label>
-                  Tipo
-                  <select name="role">
-                    <option value="station">Estação Windows</option>
-                    <option value="gateway">Gateway local Windows</option>
-                  </select>
-                </label>
-                <button disabled={busy}>Gerar convite único</button>
-              </form>
               <div className="panel">
-                <h2>2. Instalar no Windows</h2>
+                <h2>Instalar em um computador</h2>
                 <p>
-                  Baixe o pacote, extraia e execute Install.ps1 como
-                  administrador. Informe o endereço deste painel e o convite. O
-                  serviço inicia automaticamente.
+                  Baixe este executável e execute no PC da LAN house. Confirme a
+                  permissão do Windows e a instalação. O endereço do painel e o
+                  convite já vêm prontos.
                 </p>
                 <button
+                  disabled={busy}
                   onClick={() =>
                     run(async () => {
-                      const r = await fetch("/api/installer");
+                      const r = await fetch("/api/installer", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ role: "station" }),
+                      });
                       if (!r.ok) throw new Error((await r.json()).error);
                       const u = URL.createObjectURL(await r.blob());
                       const a = document.createElement("a");
                       a.href = u;
-                      a.download = "LANControl-Setup.zip";
+                      a.download = "LANControl-Instalar.exe";
                       a.click();
-                      URL.revokeObjectURL(u);
+                      setTimeout(() => URL.revokeObjectURL(u), 60000);
+                      await reload();
+                      setMessage(
+                        "Instalador pronto. Execute em um PC dentro de 48 horas. Cada arquivo conecta um único computador.",
+                      );
                     })
                   }
                 >
-                  Baixar instalador
+                  {busy
+                    ? "Preparando download…"
+                    : "Baixar instalador Windows (.exe)"}
                 </button>
                 <p className="muted">
-                  O pacote precisa ser compilado, validado e publicado pelo
-                  administrador do servidor.
+                  Sem extrair ZIP, copiar código ou preencher endereço. Nome e
+                  MAC são identificados no computador. Baixe um arquivo novo
+                  para cada PC; convite de uso único, válido por 48 horas.
                 </p>
               </div>
-            </div>
-            {invite && (
-              <div className="notice">
-                <strong>Convite: {invite.id}</strong>
-                <code>{invite.token}</code>Uso único · expira em 30 minutos.
-                Copie agora.
+              <div className="panel">
+                <h2>Gateway local</h2>
+                <p>
+                  Use em um computador que permanece ligado na rede da LAN house
+                  para enviar Wake-on-LAN.
+                </p>
+                <button
+                  className="secondary"
+                  disabled={busy}
+                  onClick={() =>
+                    run(async () => {
+                      const r = await fetch("/api/installer", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ role: "gateway" }),
+                      });
+                      if (!r.ok) throw new Error((await r.json()).error);
+                      const u = URL.createObjectURL(await r.blob());
+                      const a = document.createElement("a");
+                      a.href = u;
+                      a.download = "LANControl-Gateway-Instalar.exe";
+                      a.click();
+                      setTimeout(() => URL.revokeObjectURL(u), 60000);
+                      await reload();
+                      setMessage(
+                        "Gateway pronto para instalação. O PC escolhido precisa permanecer ligado.",
+                      );
+                    })
+                  }
+                >
+                  Baixar instalador do gateway
+                </button>
               </div>
-            )}
+            </div>
             <div className="panel">
-              <h2>Antes de instalar</h2>
+              <h2>Identificação automática</h2>
               <p>
-                Instale com autorização em uma janela de manutenção
-                descongelada. Reserve uma área persistente para agente e dados.
-                O gateway precisa permanecer ligado, e Wake-on-LAN deve estar
-                habilitado no hardware e na rede.
+                O agente usa o nome do Windows e detecta a instalação do
+                HandyCafe sem alterar a configuração existente. Apelidos
+                personalizados do HandyCafe ainda dependem da versão e de uma
+                integração validada.
               </p>
               <p>
-                Bloqueio, desbloqueio, Deep Freeze e HandyCafe exigem validação
-                das interfaces oficiais. Nenhum botão desabilitado indica
-                operação concluída.
+                Instale em uma janela de manutenção autorizada do Deep Freeze e
+                confirme que a instalação persiste após reiniciar. A conexão não
+                exige senha de administrador do painel no PC.
               </p>
             </div>
           </>

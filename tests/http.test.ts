@@ -63,7 +63,7 @@ test("HTTP health, origin protection, 2FA session, protected installer and agent
     assert.equal(
       (await fetch(url + "/api/installer", { headers: { Cookie: cookie } }))
         .status,
-      409,
+      405,
     );
     const invite = await (
       await post(
@@ -93,5 +93,113 @@ test("HTTP health, origin protection, 2FA session, protected installer and agent
   } finally {
     await server.close();
     await pg.close();
+  }
+});
+
+test("personalized EXE streams an embedded invite and enrolls the Windows identity once", async () => {
+  const { mkdtempSync, mkdirSync, writeFileSync, rmSync } =
+    await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dir = mkdtempSync(join(tmpdir(), "lan-installer-"));
+  mkdirSync(join(dir, "releases"));
+  const binary = Buffer.from("MZ-test-installer");
+  writeFileSync(join(dir, "releases", "LANControl.Installer.exe"), binary);
+  process.env.DATA_DIR = dir;
+  process.env.NODE_ENV = "production";
+  process.env.MASTER_KEY = "a".repeat(64);
+  process.env.BOOTSTRAP_TOKEN = "b".repeat(64);
+  process.env.PUBLIC_URL = "https://lan.test";
+  process.env.PORT = "0";
+  const pg = new PGlite();
+  const db: DB = {
+    query: async (s, p) =>
+      p?.length ? pg.query(s, p) : ((await pg.exec(s)).at(-1) ?? { rows: [] }),
+  };
+  await migrate(db);
+  const server = await start(db);
+  const port = server.app.getHttpServer().address().port;
+  const url = `http://127.0.0.1:${port}`;
+  const post = (p: string, body: any, cookie = "") =>
+    fetch(url + "/api" + p, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Origin: "https://lan.test",
+        Cookie: cookie,
+      },
+      body: JSON.stringify(body),
+    });
+  try {
+    const secret = newTotpSecret(),
+      step = Math.floor(Date.now() / 30000);
+    assert.equal(
+      (
+        await post("/auth/setup", {
+          token: "b".repeat(64),
+          username: "admin",
+          password: "long strong password",
+          secret,
+          code: totp(secret, step - 1),
+        })
+      ).status,
+      200,
+    );
+    const login = await post("/auth/login", {
+      username: "admin",
+      password: "long strong password",
+      code: totp(secret, step),
+    });
+    const cookie = login.headers.get("set-cookie")!;
+    assert.equal((await post("/installer", { role: "station" })).status, 401);
+    const response = await post("/installer", { role: "station" }, cookie);
+    assert.equal(response.status, 200);
+    assert(response.headers.get("content-disposition")?.includes(".exe"));
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    const bytes = Buffer.from(await response.arrayBuffer());
+    assert(bytes.subarray(0, binary.length).equals(binary));
+    assert.equal(bytes.subarray(-8).toString(), "LANSET01");
+    const length = bytes.readUInt32LE(bytes.length - 12);
+    const settings = JSON.parse(
+      bytes.subarray(bytes.length - 12 - length, bytes.length - 12).toString(),
+    );
+    assert.equal(settings.serverUrl, "https://lan.test");
+    assert(Date.parse(settings.expiresAt) > Date.now() + 47 * 3600000);
+    const enrolled = await post("/agent/enroll", {
+      token: settings.token,
+      hostname: "LAN-PC-07",
+      mac: "AA:BB:CC:DD:EE:FF",
+    });
+    assert.equal(enrolled.status, 200);
+    const record = await enrolled.json();
+    assert.equal(record.name, "LAN-PC-07");
+    assert.equal(
+      (
+        await post("/agent/enroll", {
+          token: settings.token,
+          hostname: "OTHER-PC",
+        })
+      ).status,
+      401,
+    );
+    const device = (
+      await db.query("SELECT * FROM devices WHERE id=$1", [record.id])
+    ).rows[0];
+    assert.equal(device.name_source, "windows");
+    assert.equal(device.mac, "AA:BB:CC:DD:EE:FF");
+    assert.equal(device.enrollment_hash, null);
+    const second = await post("/installer", { role: "gateway" }, cookie);
+    assert.equal(second.status, 200);
+    await second.arrayBuffer();
+    assert.equal(
+      (await db.query("SELECT id FROM devices WHERE role='gateway'")).rows
+        .length,
+      1,
+    );
+  } finally {
+    await server.close();
+    await pg.close();
+    rmSync(dir, { recursive: true, force: true });
+    delete process.env.DATA_DIR;
   }
 });

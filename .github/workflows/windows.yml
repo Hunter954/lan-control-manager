@@ -26,4 +26,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: LANControl-Windows-x64
-          path: artifacts/LANControl-Setup.zip
+          path: |
+            artifacts/LANControl-Setup.zip
+            artifacts/exe/LANControl.Installer.exe

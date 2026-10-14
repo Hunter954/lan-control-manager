@@ -4,7 +4,7 @@
 #requires -RunAsAdministrator
 $ErrorActionPreference = 'Stop'
 $panel = Read-Host 'Endereco HTTPS do painel'
-$invite = Read-Host 'Convite de uso unico (30 minutos)'
+$invite = Read-Host 'Convite de uso unico (48 horas)'
 $uri = [Uri]$panel
 if ($uri.Scheme -ne 'https') { throw 'HTTPS obrigatorio' }
 $source = Join-Path $PSScriptRoot 'bin'

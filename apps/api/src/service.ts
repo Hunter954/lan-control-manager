@@ -157,11 +157,26 @@ export class Service {
   }
   async enroll(b: any, ip: string) {
     await this.limit("enroll:" + ip);
+    const identity = z
+      .object({
+        token: z.string().length(64),
+        hostname: str.optional(),
+        mac: z
+          .string()
+          .regex(/^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$/)
+          .nullish(),
+      })
+      .parse(b);
     const t = token();
     const d = (
       await this.db.query(
-        "UPDATE devices SET token_hash=$1,enrollment_hash=NULL,enrollment_expires=NULL WHERE enrollment_hash=$2 AND enrollment_expires>now() AND NOT revoked RETURNING id,role",
-        [digest(t), digest(z.string().length(64).parse(b.token))],
+        "UPDATE devices SET token_hash=$1,enrollment_hash=NULL,enrollment_expires=NULL,name=CASE WHEN auto_name AND $3::text IS NOT NULL THEN $3 ELSE name END,name_source=CASE WHEN auto_name AND $3::text IS NOT NULL THEN 'windows' ELSE name_source END,mac=COALESCE($4,mac) WHERE enrollment_hash=$2 AND enrollment_expires>now() AND NOT revoked RETURNING id,role,name",
+        [
+          digest(t),
+          digest(identity.token),
+          identity.hostname ?? null,
+          identity.mac ?? null,
+        ],
       )
     ).rows[0];
     if (!d) throw new HttpError(401, "Convite inválido ou expirado");
@@ -170,16 +185,31 @@ export class Service {
   }
   async createDevice(b: any, actor: string) {
     const v = z
-      .object({ name: str, role: z.enum(["station", "gateway"]) })
+      .object({
+        name: str.optional(),
+        role: z.enum(["station", "gateway"]).default("station"),
+      })
       .parse(b);
     const t = token(),
       id = randomUUID();
     await this.db.query(
-      "INSERT INTO devices(id,name,role,enrollment_hash,enrollment_expires) VALUES($1,$2,$3,$4,now()+interval '30 minutes')",
-      [id, v.name, v.role, digest(t)],
+      "INSERT INTO devices(id,name,role,enrollment_hash,enrollment_expires,auto_name,name_source) VALUES($1,$2,$3,$4,now()+interval '48 hours',$5,$6)",
+      [
+        id,
+        v.name ?? "Aguardando instalação",
+        v.role,
+        digest(t),
+        !v.name,
+        v.name ? "manual" : "pending",
+      ],
     );
     await this.audit(actor, "device.invited", id);
-    return { id, token: t, expiresInMinutes: 30 };
+    return {
+      id,
+      token: t,
+      expiresInHours: 48,
+      expiresAt: new Date(Date.now() + 48 * 3600000).toISOString(),
+    };
   }
   async command(b: any, actor: string, source = "admin") {
     const v = z
@@ -222,6 +252,8 @@ export class Service {
             lockState: z
               .enum(["unknown", "locked", "unlocked"])
               .default("unknown"),
+            handyCafeInstalled: z.boolean().optional(),
+            handyCafeVersion: z.string().max(160).optional(),
             deepFreezeState: z
               .enum(["unknown", "frozen", "thawed", "unprotected"])
               .default("unknown"),
@@ -275,7 +307,7 @@ export class Service {
     return {
       devices: (
         await this.db.query(
-          "SELECT id,name,role,last_seen,telemetry,capabilities,revoked,enrollment_expires FROM devices ORDER BY name",
+          "SELECT id,name,name_source,mac,role,last_seen,telemetry,capabilities,revoked,enrollment_expires FROM devices ORDER BY name",
         )
       ).rows,
       commands: (

@@ -4,7 +4,8 @@ import { NestFactory } from "@nestjs/core";
 import express, { Request, Response } from "express";
 import helmet from "helmet";
 import next from "next";
-import { existsSync } from "node:fs";
+import { existsSync, createReadStream, statSync } from "node:fs";
+import { installerTrailer } from "./installer";
 import { resolve } from "node:path";
 import { connect, DB } from "./db";
 import { Service, HttpError } from "./service";
@@ -144,33 +145,56 @@ export async function start(db: DB) {
               .join("\n"),
         );
       }
-      if (p === "/installer" && req.method === "GET") {
+      if (p === "/installer" && req.method === "POST") {
         const path = resolve(
           process.env.DATA_DIR ?? "/data",
-          "releases/LANControl-Setup.zip",
+          "releases/LANControl.Installer.exe",
         );
         if (!existsSync(path))
           throw new HttpError(
             409,
-            "Instalador ainda não publicado. Compile e valide o pacote Windows conforme docs/INSTALACAO.md.",
+            "Instalador executável ainda não publicado. Aguarde o deploy.",
           );
-        await svc.audit(a.username, "installer.download");
-        return res.download(path);
+        const invite = await svc.createDevice(
+          { role: b.role ?? "station" },
+          a.username,
+        );
+        const trailer = installerTrailer({
+          serverUrl: origin,
+          token: invite.token,
+          expiresAt: invite.expiresAt,
+        });
+        await svc.audit(a.username, "installer.personalized", invite.id);
+        res.type("application/octet-stream");
+        res.setHeader(
+          "Content-Disposition",
+          'attachment; filename="LANControl-Instalar.exe"',
+        );
+        res.setHeader("Content-Length", statSync(path).size + trailer.length);
+        const stream = createReadStream(path);
+        res.on("close", () => stream.destroy());
+        stream.on("error", () => res.destroy());
+        stream.on("end", () => res.end(trailer));
+        stream.pipe(res, { end: false });
+        return;
       }
+      if (p === "/installer" && req.method === "GET")
+        throw new HttpError(
+          405,
+          "Use o botão Baixar instalador na seção Instalação.",
+        );
       throw new HttpError(404, "Rota inexistente");
     } catch (e: any) {
       const status =
         e instanceof HttpError ? e.status : e.name === "ZodError" ? 400 : 500;
-      res
-        .status(status)
-        .json({
-          error:
-            status === 500
-              ? "Erro interno; consulte a auditoria/saúde do serviço"
-              : e.name === "ZodError"
-                ? "Dados inválidos"
-                : e.message,
-        });
+      res.status(status).json({
+        error:
+          status === 500
+            ? "Erro interno; consulte a auditoria/saúde do serviço"
+            : e.name === "ZodError"
+              ? "Dados inválidos"
+              : e.message,
+      });
     }
   });
   const web = next({
