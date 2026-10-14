@@ -51,7 +51,7 @@ public class ShareService extends Service {
     current = this;
     mode = intent.getStringExtra("mode");
     facing = intent.getStringExtra("facing") == null ? "rear" : intent.getStringExtra("facing");
-    controlAllowed = "screen".equals(mode) && intent.getBooleanExtra("control", false);
+    controlAllowed = false;
     try {
       if (Build.VERSION.SDK_INT >= 33
           && checkSelfPermission(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -138,7 +138,7 @@ public class ShareService extends Service {
   }
 
   public void setControl(boolean allowed) {
-    controlAllowed = allowed && "screen".equals(mode);
+    controlAllowed = false;
     getSystemService(NotificationManager.class).notify(9, notification());
     sendStatus();
   }
@@ -190,7 +190,7 @@ public class ShareService extends Service {
                           }
                           return;
                         }
-                        if (ControlService.current != null) ControlService.current.execute(command);
+                        // Viewing edition: remote input is not supported.
                       });
                 } catch (Exception ignored) {
                 }

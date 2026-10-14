@@ -5,13 +5,11 @@ import android.content.*;
 import android.content.pm.PackageManager;
 import android.media.projection.*;
 import android.os.*;
-import android.provider.Settings;
 import android.view.*;
 import android.widget.*;
 
 public class MainActivity extends Activity {
   TextView status;
-  CheckBox control;
   boolean paired = false;
   Handler handler = new Handler();
 
@@ -32,27 +30,14 @@ public class MainActivity extends Activity {
     info.setText(
         "Você inicia e encerra cada sessão. Tela e câmera são transmitidas ao administrador"
             + " conectado ao painel. Na sessão de câmera, o administrador pode alternar entre"
-            + " frontal e traseira. Não há gravação nem acesso silencioso. Sessões duram até 15"
-            + " minutos.");
+            + " frontal e traseira. Esta versão permite visualizar, sem toques remotos. Não há"
+            + " gravação nem acesso silencioso. Sessões duram até 15 minutos.");
     info.setTextSize(16);
     info.setPadding(0, 20, 0, 20);
     layout.addView(info);
     status = new TextView(this);
     status.setTextSize(17);
     layout.addView(status);
-    control = new CheckBox(this);
-    control.setText("Permitir toques e gestos remotos nesta sessão de tela");
-    control.setChecked(ShareService.current != null && ShareService.current.controlAllowed);
-    layout.addView(control);
-    control.setOnCheckedChangeListener(
-        (b, v) -> {
-          if (ShareService.current != null)
-            ShareService.current.setControl(v && ControlService.current != null);
-        });
-    button(
-        layout,
-        "Autorizar controle no Android",
-        () -> startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)));
     button(
         layout,
         "Compartilhar tela",
@@ -160,7 +145,7 @@ public class MainActivity extends Activity {
   }
 
   void launch(Intent intent) {
-    intent.putExtra("control", control.isChecked() && ControlService.current != null);
+    intent.putExtra("control", false);
     startForegroundService(intent);
   }
 

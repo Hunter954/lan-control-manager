@@ -127,22 +127,24 @@ export default function MobilePanel({
               : "Baixar APK para celular/tablet"}
           </button>
           <p className="muted">
-            Android 8 ou superior. O app solicita permissões no próprio tablet e
-            permite encerrar a qualquer momento.
+            Versão 0.2.1 · Android 8 ou superior. Visualização de tela e
+            câmeras, sem acessibilidade ou toques remotos. O app solicita
+            permissões no tablet e permite encerrar a qualquer momento.
           </p>
         </div>
         <div className="panel">
           <h2>Iniciar a sessão</h2>
           <p>
             No tablet, abra LAN Control Android e escolha Compartilhar tela ou
-            câmera. Para toques, autorize a acessibilidade no Android e marque
-            Permitir toques nesta sessão. Sessões duram até 15 minutos; não há
-            gravação.
+            câmera. A captura de tela exige autorização do Android em cada
+            sessão. Sessões duram até 15 minutos; não há gravação.
           </p>
           <p className="muted">
-            Câmera precisa ser iniciada no app. Telas de senha, bloqueio e
-            permissões exigem ação local. Encerrar a visualização também encerra
-            o compartilhamento no dispositivo.
+            Se o Play Protect bloquear a instalação, não desative a proteção.
+            Registre o aviso para revisão do APK. Câmera precisa ser iniciada no
+            app. Telas de senha, bloqueio e permissões exigem ação local.
+            Encerrar a visualização também encerra o compartilhamento no
+            dispositivo.
           </p>
         </div>
       </div>
