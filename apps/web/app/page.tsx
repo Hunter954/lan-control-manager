@@ -22,7 +22,7 @@ const labels: Record<string, string> = {
 };
 export default function Page() {
   const [user, setUser] = useState<any>(null),
-    [tab, setTab] = useState("stations"),
+    [tab, setTabState] = useState("stations"),
     [data, setData] = useState<any>({
       devices: [],
       commands: [],
@@ -34,6 +34,30 @@ export default function Page() {
     [setup, setSetup] = useState(false),
     [secret, setSecret] = useState(""),
     [busy, setBusy] = useState(false);
+  function setTab(value: string) {
+    try {
+      sessionStorage.setItem("lan-admin-tab", value);
+    } catch {}
+    setTabState(value);
+  }
+  useEffect(() => {
+    try {
+      const saved = sessionStorage.getItem("lan-admin-tab");
+      if (
+        saved &&
+        [
+          "stations",
+          "commands",
+          "schedules",
+          "integrations",
+          "audit",
+          "install",
+          "mobile",
+        ].includes(saved)
+      )
+        setTabState(saved);
+    } catch {}
+  }, []);
   async function api(path: string, body?: any) {
     const r = await fetch("/api" + path, {
       method: body ? "POST" : "GET",
@@ -241,6 +265,10 @@ export default function Page() {
             onClick={() =>
               run(async () => {
                 await api("/auth/logout", {});
+                try {
+                  sessionStorage.removeItem("lan-mobile-device");
+                  sessionStorage.removeItem("lan-admin-tab");
+                } catch {}
                 setUser(null);
               })
             }

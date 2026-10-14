@@ -16,70 +16,109 @@ export default function MobilePanel({
   const connection = useRef<WebSocket | null>(null),
     imageUrl = useRef(""),
     gesture = useRef<{ x: number; y: number; time: number } | null>(null);
+  function selectDevice(id: string) {
+    try {
+      if (id) sessionStorage.setItem("lan-mobile-device", id);
+      else sessionStorage.removeItem("lan-mobile-device");
+    } catch {}
+    setSelected(id);
+  }
   useEffect(() => {
-    setFrame("");
+    try {
+      const saved = sessionStorage.getItem("lan-mobile-device");
+      if (saved && /^[0-9a-f-]{36}$/i.test(saved)) setSelected(saved);
+    } catch {}
+  }, []);
+  useEffect(() => {
+    let active = true,
+      retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let socket: WebSocket | undefined,
+      deadline = 0;
+    function clearFrame() {
+      if (imageUrl.current) URL.revokeObjectURL(imageUrl.current);
+      imageUrl.current = "";
+      setFrame("");
+    }
+    clearFrame();
     setError("");
     setStatus({ mode: "offline", control: false });
     if (!selected) return;
-    const ws = new WebSocket(
-      `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/mobile/live?device=${selected}`,
-    );
-    ws.binaryType = "blob";
-    connection.current = ws;
-    let sourceKey = "";
-    ws.onmessage = (e) => {
-      if (e.data instanceof Blob) {
-        const next = URL.createObjectURL(
-          new Blob([e.data], { type: "image/jpeg" }),
-        );
-        if (imageUrl.current) URL.revokeObjectURL(imageUrl.current);
-        imageUrl.current = next;
-        setFrame(next);
-      } else {
-        try {
-          const data = JSON.parse(e.data);
-          if (data.type === "status") {
-            setStatus(data);
-            const nextSource =
-              data.mode + (data.mode === "camera" ? ":" + data.facing : "");
-            if (
-              sourceKey !== nextSource ||
-              ["offline", "stopped", "waiting"].includes(data.mode)
-            ) {
-              setFrame("");
-              if (imageUrl.current) {
-                URL.revokeObjectURL(imageUrl.current);
-                imageUrl.current = "";
-              }
-            }
-          }
-          sourceKey =
-            data.type === "status"
-              ? data.mode + (data.mode === "camera" ? ":" + data.facing : "")
-              : sourceKey;
-          if (data.type === "error") setError(data.message);
-        } catch {}
-      }
-    };
-    ws.onclose = () => {
-      if (imageUrl.current) {
-        URL.revokeObjectURL(imageUrl.current);
-        imageUrl.current = "";
-      }
-      setStatus({ mode: "offline", control: false });
-      setFrame("");
-    };
-    ws.onerror = () =>
-      setError(
-        "Não foi possível abrir a sessão. Verifique login e conexão do tablet.",
+    function connect() {
+      if (!active) return;
+      const ws = new WebSocket(
+        `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/api/mobile/live?device=${selected}`,
       );
+      socket = ws;
+      connection.current = ws;
+      ws.binaryType = "blob";
+      let sourceKey = "";
+      ws.onopen = () => {
+        if (!active) {
+          ws.close();
+          return;
+        }
+        deadline = 0;
+        setError("");
+      };
+      ws.onmessage = (e) => {
+        if (!active || socket !== ws) return;
+        if (e.data instanceof Blob) {
+          const next = URL.createObjectURL(
+            new Blob([e.data], { type: "image/jpeg" }),
+          );
+          if (imageUrl.current) URL.revokeObjectURL(imageUrl.current);
+          imageUrl.current = next;
+          setFrame(next);
+        } else {
+          try {
+            const data = JSON.parse(e.data);
+            if (data.type === "status") {
+              setStatus(data);
+              const nextSource =
+                data.mode + (data.mode === "camera" ? ":" + data.facing : "");
+              if (
+                sourceKey !== nextSource ||
+                ["offline", "stopped", "waiting"].includes(data.mode)
+              )
+                clearFrame();
+              sourceKey = nextSource;
+            }
+            if (data.type === "error") setError(data.message);
+          } catch {}
+        }
+      };
+      ws.onclose = (event) => {
+        if (!active || socket !== ws) return;
+        connection.current = null;
+        clearFrame();
+        setStatus({ mode: "offline", control: false });
+        if (event.code === 1008) {
+          setError(
+            event.reason === "Visualização aberta em outra janela"
+              ? "Outro painel assumiu a visualização deste dispositivo."
+              : "Acesso encerrado. Verifique o login e se o dispositivo foi revogado.",
+          );
+          return;
+        }
+        deadline ||= Date.now() + 45000;
+        if (Date.now() < deadline) {
+          setError("Reconectando ao mesmo compartilhamento…");
+          retryTimer = setTimeout(connect, 1500);
+        } else
+          setError(
+            "Não foi possível reconectar. Verifique a conexão e inicie nova sessão no tablet.",
+          );
+      };
+      ws.onerror = () => {}; // onclose handles transport failures and bounded retries.
+    }
+    connect();
     return () => {
-      ws.close();
+      active = false;
+      if (retryTimer) clearTimeout(retryTimer);
+      socket?.close();
       connection.current = null;
-      if (imageUrl.current) {
-        URL.revokeObjectURL(imageUrl.current);
-        imageUrl.current = "";
-      }
+      if (imageUrl.current) URL.revokeObjectURL(imageUrl.current);
+      imageUrl.current = "";
     };
   }, [selected]);
   function control(action: string, extra: any = {}) {
@@ -158,8 +197,9 @@ export default function MobilePanel({
             Registre o aviso para revisão do APK. A alternância exige autorizar
             Tela e câmeras no app. Modos Somente tela e Câmera permitem apenas o
             recurso escolhido. Telas protegidas e permissões exigem ação local.
-            Encerrar a visualização também encerra o compartilhamento no
-            dispositivo.
+            Recarregar o painel reconecta ao mesmo compartilhamento. Se o painel
+            não voltar em até 60 segundos, a sessão é encerrada. Use Encerrar
+            sessão para parar imediatamente.
           </p>
         </div>
       </div>
@@ -173,7 +213,7 @@ export default function MobilePanel({
           Dispositivo
           <select
             value={selected}
-            onChange={(e) => setSelected(e.target.value)}
+            onChange={(e) => selectDevice(e.target.value)}
           >
             <option value="">Selecione um dispositivo</option>
             {devices
@@ -199,7 +239,7 @@ export default function MobilePanel({
                 body: JSON.stringify({ id: selected }),
               });
               if (!r.ok) throw new Error((await r.json()).error);
-              setSelected("");
+              selectDevice("");
               await reload();
             } catch (e: any) {
               setError(e.message);
@@ -222,10 +262,22 @@ export default function MobilePanel({
           </span>
           <button
             className="secondary"
-            disabled={!selected}
-            onClick={() => {
-              control("stop");
-              setSelected("");
+            disabled={!selected || busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                const r = await fetch("/api/mobile/stop", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ id: selected }),
+                });
+                if (!r.ok) throw new Error((await r.json()).error);
+                selectDevice("");
+              } catch (e: any) {
+                setError(e.message);
+              } finally {
+                setBusy(false);
+              }
             }}
           >
             Encerrar sessão

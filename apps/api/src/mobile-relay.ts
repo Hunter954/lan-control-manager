@@ -53,6 +53,23 @@ export function attachMobileRelay(
     >(),
     viewers = new Map<string, WebSocket>();
   const connections = new Set<WebSocket>();
+  const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  let shuttingDown = false;
+  function cancelReconnect(id: string) {
+    const timer = reconnectTimers.get(id);
+    if (timer) clearTimeout(timer);
+    reconnectTimers.delete(id);
+  }
+  function stopPhone(id: string, reason: string) {
+    cancelReconnect(id);
+    const phone = phones.get(id);
+    if (phone?.socket.readyState === WebSocket.OPEN) {
+      phone.status = { type: "status", mode: "stopped", control: false };
+      phone.socket.send(JSON.stringify({ type: "control", action: "stop" }));
+      phone.socket.close(1000, reason);
+    }
+  }
+
   server.on("upgrade", (req, socket, head) => {
     let url: URL;
     try {
@@ -87,11 +104,10 @@ export function attachMobileRelay(
             id,
           ])
         ).rows[0];
-        if (d?.role !== "android" || d.revoked || viewers.has(id))
-          throw new Error();
+        if (d?.role !== "android" || d.revoked) throw new Error();
       }
       wss.handleUpgrade(req, socket, head, (ws) => {
-        if (isPhone ? phones.has(id) : viewers.has(id)) {
+        if (isPhone && phones.has(id)) {
           ws.close(1008, "Sessão já conectada");
           return;
         }
@@ -112,7 +128,10 @@ export function attachMobileRelay(
             control: false,
           });
         } else {
+          cancelReconnect(id);
+          const previous = viewers.get(id);
           viewers.set(id, ws);
+          previous?.close(1008, "Visualização aberta em outra janela");
           send(
             ws,
             phones.get(id)?.status ?? {
@@ -138,6 +157,8 @@ export function attachMobileRelay(
               );
             } else await svc.admin(session);
           } catch {
+            if (!isPhone && viewers.get(id) === ws)
+              stopPhone(id, "Autenticação encerrada");
             ws.close(1008, "Sessão encerrada");
           } finally {
             busy = false;
@@ -255,8 +276,12 @@ export function attachMobileRelay(
               });
               return;
             }
+            if (viewers.get(id) !== ws) throw new Error();
             await svc.audit(actor, "mobile.control." + command.action, id);
-            send(phone.socket, command);
+            if (viewers.get(id) !== ws) throw new Error();
+            if (command.action === "stop")
+              stopPhone(id, "Encerrado pelo administrador");
+            else send(phone.socket, command);
           } catch {
             send(ws, {
               type: "error",
@@ -268,6 +293,7 @@ export function attachMobileRelay(
           clearInterval(timer);
           connections.delete(ws);
           if (isPhone && phones.get(id)?.socket === ws) {
+            cancelReconnect(id);
             phones.delete(id);
             send(viewers.get(id), {
               type: "status",
@@ -277,7 +303,22 @@ export function attachMobileRelay(
             svc.audit(actor, "mobile.session.ended", id).catch(() => {});
           } else if (!isPhone && viewers.get(id) === ws) {
             viewers.delete(id);
-            send(phones.get(id)?.socket, { type: "control", action: "stop" });
+            const phone = phones.get(id)?.socket;
+            if (!shuttingDown && phone?.readyState === WebSocket.OPEN) {
+              cancelReconnect(id);
+              reconnectTimers.set(
+                id,
+                setTimeout(() => {
+                  reconnectTimers.delete(id);
+                  if (!viewers.has(id) && phones.get(id)?.socket === phone) {
+                    stopPhone(id, "Painel não reconectou em 60 segundos");
+                    svc
+                      .audit(actor, "mobile.viewer.reconnect.expired", id)
+                      .catch(() => {});
+                  }
+                }, 60000),
+              );
+            }
           }
         });
         ws.on("error", () => {});
@@ -287,11 +328,15 @@ export function attachMobileRelay(
     });
   });
   return {
+    stop: (id: string) => stopPhone(id, "Encerrado pelo administrador"),
     disconnect: (id: string) => {
+      cancelReconnect(id);
       phones.get(id)?.socket.close(1008, "Acesso revogado");
       viewers.get(id)?.close(1008, "Acesso revogado");
     },
     close: () => {
+      shuttingDown = true;
+      for (const id of reconnectTimers.keys()) cancelReconnect(id);
       for (const c of connections) c.terminate();
       wss.close();
     },

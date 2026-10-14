@@ -12,6 +12,7 @@ import { resolve } from "node:path";
 import { connect, DB } from "./db";
 import { Service, HttpError } from "./service";
 import { digest } from "./security";
+import { z } from "zod";
 @Module({})
 class AppModule {}
 export async function start(db: DB) {
@@ -109,6 +110,16 @@ export async function start(db: DB) {
           id,
         ]);
         await svc.audit(a.username, "schedule.toggled", id);
+        return res.json({ ok: true });
+      }
+      if (p === "/mobile/stop" && req.method === "POST") {
+        const id = z.uuid().parse(b.id);
+        const d = (await db.query("SELECT role FROM devices WHERE id=$1", [id]))
+          .rows[0];
+        if (d?.role !== "android")
+          throw new HttpError(404, "Android não encontrado");
+        mobileRelay.stop(id);
+        await svc.audit(a.username, "mobile.control.stop", id);
         return res.json({ ok: true });
       }
       if (p === "/device/revoke" && req.method === "POST") {
