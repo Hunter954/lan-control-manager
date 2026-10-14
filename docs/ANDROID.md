@@ -2,7 +2,7 @@
 
 ## Instalar e parear
 
-No painel autenticado, abra Celulares e tablets → Baixar APK. Cada arquivo contém convite de uso único por 48 horas e o endereço HTTPS do painel. Transfira somente para seu dispositivo autorizado e instale pelo instalador padrão do Android. Autorize a fonte de instalação quando o Android solicitar; o app não altera políticas nem desativa proteções. Android mínimo: 8 (API 26), alvo: 15 (API 35). APK Java sem biblioteca nativa, compatível com os ABIs suportados pelo Android.
+Link curto de download: https://tinyurl.com/25yf64eu (destino /apk). Se necessário, faça o login administrativo com 2FA; o painel retorna automaticamente ao atalho. Toque Baixar APK para gerar o instalador personalizado. Apenas visitar o link não cria um convite. Também é possível usar Celulares e tablets → Baixar APK no painel autenticado. Cada arquivo contém convite de uso único por 48 horas e o endereço HTTPS do painel. Transfira somente para seu dispositivo autorizado e instale pelo instalador padrão do Android. Autorize a fonte de instalação quando o Android solicitar; o app não altera políticas nem desativa proteções. Android mínimo: 8 (API 26), alvo: 15 (API 35). APK Java sem biblioteca nativa, compatível com os ABIs suportados pelo Android.
 
 Abra LAN Control Android com internet. O nome/modelo é enviado durante o pareamento. O token de máquina é cifrado por chave AES-GCM no Android Keystore; backup do app desativado. Não há senha de administrador dentro do APK. Depois do pareamento, o convite não conecta outra máquina.
 

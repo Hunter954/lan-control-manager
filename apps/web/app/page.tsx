@@ -56,6 +56,14 @@ export default function Page() {
       .catch(() => {});
   }, []);
   useEffect(() => {
+    if (
+      user &&
+      new URLSearchParams(location.search).get("download") === "apk"
+    ) {
+      location.replace("/apk");
+    }
+  }, [user]);
+  useEffect(() => {
     if (!user) return;
     const t = setInterval(
       () =>
