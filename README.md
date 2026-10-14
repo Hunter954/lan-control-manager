@@ -2,7 +2,9 @@
 
 Primeira implementação executável do gerenciamento da LAN house. Painel Next.js responsivo e API NestJS no mesmo serviço; PostgreSQL com migrações; scheduler persistente; serviço Windows C#/.NET 10 e gateway WOL; instalador PowerShell com executáveis x64 autocontidos.
 
-**Estado desta entrega:** código compilado e testes locais aprovados; publicação em GitHub/Railway em andamento. Integrações autenticadas Deep Freeze, HandyCafe, bloqueio/desbloqueio e Steam cliente permanecem desabilitadas. Consulte docs/STATUS.md para a separação entre implementação, testes locais e validação real.
+**Painel:** https://lan-control-manager-production.up.railway.app
+
+**Estado desta entrega:** código compilado e testes locais aprovados; publicado no GitHub/Railway. Integrações autenticadas Deep Freeze, HandyCafe, bloqueio/desbloqueio e Steam cliente permanecem desabilitadas. Consulte docs/STATUS.md para a separação entre implementação, testes locais e validação real.
 
 ## Executar
 
@@ -22,3 +24,9 @@ Na tela Primeiro acesso, informe BOOTSTRAP_TOKEN, configure a chave TOTP no aute
 - security: ferramenta de assinatura da release; nenhuma chave privada incluída.
 
 Instalação: docs/INSTALACAO.md. Segurança: docs/SEGURANCA.md. Integrações: docs/INTEGRACOES.md. Deploy: docs/DEPLOY.md.
+
+## Primeiro acesso em produção
+
+Abra o painel e selecione Primeiro acesso. No Railway, no serviço lan-control-manager, copie BOOTSTRAP_TOKEN em Variables e informe-o somente nessa tela HTTPS. Configure o autenticador TOTP, crie usuário e senha própria (mínimo 14 caracteres). Nenhum administrador padrão foi criado. Aguarde o próximo código do autenticador após o cadastro antes de fazer login. MASTER_KEY deve permanecer protegida e preservada; não a substitua para corrigir login.
+
+O instalador Windows pode ser baixado na seção Instalação depois do login. O build Docker gera os executáveis e inicializa /data/releases automaticamente. Validação do agente em Windows real e integrações continuam pendentes.

@@ -1,4 +1,4 @@
-# Publicação preparada, ainda pendente
+# Publicação Railway
 
 ## Infraestrutura
 
@@ -14,4 +14,8 @@ Repositório público: Hunter954/lan-control-manager (visibilidade autorizada pe
 6. O Dockerfile compila os agentes Windows e cria LANControl-Setup.zip. O entrypoint copia o pacote e seu SHA256 para /data/releases na inicialização, com permissões para o usuário node. /api/installer libera download apenas com sessão administrativa. Executáveis assinados via OTA devem ser hospedados em endpoint HTTPS confiável, acessível pelo atualizador.
 7. Após configurar administrador, guarde o bootstrap com acesso restrito. A configuração já é recusada quando existe administrador. Faça backup de Postgres, MASTER_KEY, chaves de assinatura privadas e /data conforme a política da LAN house.
 
-Sem fonte conectada e domínio não há painel público nesta entrega. Não foi enviado um pacote não validado a uma estação real.
+Publicação concluída com status SUCCESS em 14/10/2026. Painel: https://lan-control-manager-production.up.railway.app. Não foi enviado um agente a uma estação real.
+
+## Estado aplicado
+
+Serviço lan-control-manager segue a branch main automaticamente. PostgreSQL associado via referência de variável; volume lan-control-data montado em /data; variáveis de criptografia e bootstrap geradas aleatoriamente no Railway. Migrações aplicadas na inicialização. Pacote Windows compilado e copiado para o volume; download exige sessão administrativa. Nenhum segredo foi incluído no repositório.
