@@ -6,21 +6,21 @@ No painel autenticado, abra Celulares e tablets → Baixar APK. Cada arquivo con
 
 Abra LAN Control Android com internet. O nome/modelo é enviado durante o pareamento. O token de máquina é cifrado por chave AES-GCM no Android Keystore; backup do app desativado. Não há senha de administrador dentro do APK. Depois do pareamento, o convite não conecta outra máquina.
 
-## Tela — edição de visualização 0.2.1
+## Tela — edição de visualização 0.2.2
 
-No tablet, toque Compartilhar tela e confirme a autorização do sistema. MediaProjection exige consentimento para cada nova sessão; instalar o app não concede essa autorização. A transmissão usa serviço foreground com notificação permanente e botão ENCERRAR.
+No tablet, escolha Tela e toque Iniciar sessão e confirme a autorização do sistema. MediaProjection exige consentimento para cada nova sessão; instalar o app não concede essa autorização. A transmissão usa serviço foreground com notificação permanente e botão ENCERRAR.
 
-O APK 0.2.1 não declara serviço de acessibilidade e não executa toques, gestos ou texto remotos. O serviço de controle foi retirado da distribuição de teste após o Play Protect bloquear a versão anterior. Não se altera pacote, assinatura ou alvo de SDK para evitar a análise. O nome do pacote e a chave persistente permanecem iguais, e o versionCode aumenta para 2.
+Desde a versão 0.2.1, o APK não declara serviço de acessibilidade e não executa toques, gestos ou texto remotos. O serviço de controle foi retirado da distribuição de teste após o Play Protect bloquear a versão anterior. Não se altera pacote, assinatura ou alvo de SDK para evitar a análise. O nome do pacote e a chave persistente permanecem iguais, e a versão atual 0.2.2 usa versionCode 3.
 
 O bloqueio mostrado pelo aparelho não prova uma causa específica. Build e assinatura corretos não garantem aprovação pelo Play Protect. Se a nova versão continuar bloqueada, preservar a proteção e encaminhar o APK para revisão pelo canal oficial do Google; não tentar contornar a análise. Distribuição gerenciada e integrações oficiais de controle dependem de validação futura, sem promessa de eliminar autorizações do sistema.
 
 ## Câmera
 
-Inicie Compartilhar câmera frontal ou traseira no app, concedendo CAMERA. O administrador pode alternar as câmeras durante essa sessão. Não é possível ligar a câmera pelo painel se o usuário iniciou apenas compartilhamento de tela; encerrar e iniciar o modo câmera no tablet continua necessário. Áudio/microfone não implementados.
+No app, escolha Câmera frontal ou traseira e toque Iniciar sessão, concedendo CAMERA. O administrador pode alternar as câmeras durante essa sessão. Não é possível ligar a câmera pelo painel se o usuário iniciou apenas compartilhamento de tela; encerrar e iniciar o modo câmera no tablet continua necessário. Áudio/microfone não implementados.
 
 ## Sessão e privacidade
 
-Sessões duram no máximo 15 minutos. Notificação e aplicativo mostram captura ativa, com ENCERRAR. Parar no tablet, desconectar/encerrar a visualização no painel, revogar o dispositivo ou perder a conexão interrompe o compartilhamento. O serviço não é iniciado no boot e não tenta reconectar silenciosamente. Permissões são concedidas pelas telas oficiais; não existe desbloqueio de senha, root, ADB ou captura de telas protegidas pelo Android.
+Versão 0.2.2: sessões não têm limite fixo de duração. A sessão administrativa continua sujeita à expiração normal de autenticação (8 horas). Autorizações e conectividade permanecem necessárias. Notificação e aplicativo mostram captura ativa, com ENCERRAR. Parar no tablet, desconectar/encerrar a visualização no painel, revogar o dispositivo ou perder a conexão interrompe o compartilhamento. O serviço não é iniciado no boot e não tenta reconectar silenciosamente. Permissões são concedidas pelas telas oficiais; não existe desbloqueio de senha, root, ADB ou captura de telas protegidas pelo Android.
 
 Primeira implementação: JPEG por WebSocket HTTPS/WSS, até cerca de 4 quadros por segundo, imagem de tela com maior lado até 1024 pixels. Sem áudio, WebRTC, gravação ou acesso a arquivos. Latência e resolução de câmera dependem do aparelho/rede. Frames são encaminhados em memória, não armazenados em disco/banco. Logs registram sessão e ações solicitadas, sem conteúdo de imagens ou texto digitado.
 
@@ -33,3 +33,7 @@ O build cria APK unsigned como template privado do servidor. A API substitui ass
 Build Android e assinatura do APK personalizados validados localmente; testes de protocolo com cliente Android simulado e administrador cobrem autenticação, origem, consentimento, frames, câmeras e revogação. Execução real de MediaProjection, Camera2, câmera frontal/traseira precisa do piloto no tablet; instalação e aceitação pelo Play Protect ainda dependem de teste real. SDK/AGP e binários de assinatura também são compilados/configurados no Docker do Railway.
 
 Referências oficiais: https://developer.android.com/media/grow/media-projection ; https://developer.android.com/develop/background-work/services/fgs/service-types .
+
+## Fluxo simplificado 0.2.2
+
+Um seletor Tela/Câmera frontal/Câmera traseira e um botão Iniciar sessão substituem os três botões de início. Permissões de notificações e câmera (somente no modo câmera) são solicitadas quando a pessoa inicia, continuando o fluxo após cada aprovação. MediaProjection mantém a confirmação oficial de cada sessão. Negar qualquer permissão cancela o início; não há aceite automático. Não são solicitadas todas as permissões indiscriminadamente. O botão Encerrar aparece durante a sessão; a notificação permanente também permite parar. Rotação conserva o modo aguardando autorização, sem repetir o pedido automaticamente. O consentimento, a parada local e a revogação são preservados.

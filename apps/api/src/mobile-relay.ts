@@ -112,7 +112,6 @@ export function attachMobileRelay(
           );
           svc.audit(actor, "mobile.viewer.connected", id).catch(() => {});
         }
-        const began = Date.now();
         let count = 0,
           last = Date.now(),
           busy = false;
@@ -120,7 +119,6 @@ export function attachMobileRelay(
           if (busy) return;
           busy = true;
           try {
-            if (Date.now() - began > 15 * 60000) throw new Error();
             if (isPhone) {
               await svc.device(bearer!);
               await svc.db.query(

@@ -28,7 +28,7 @@ function message(ws: WebSocket) {
     });
   });
 }
-test("Android relay enforces session authentication, local consent, role and revocation", async () => {
+test("Android relay enforces session authentication, local consent, role and revocation", async (t) => {
   const pg = new PGlite();
   const db: DB = {
     query: async (s, p) =>
@@ -62,6 +62,10 @@ test("Android relay enforces session authentication, local consent, role and rev
     "android",
   );
   const server = createServer();
+  t.mock.timers.enable({ apis: ["setInterval"] });
+  const realNow = Date.now.bind(Date);
+  let elapsed = 0;
+  t.mock.method(Date, "now", () => realNow() + elapsed);
   const relay = attachMobileRelay(server, svc, "https://lan.test");
   server.listen(0, "127.0.0.1");
   await once(server, "listening");
@@ -137,6 +141,15 @@ test("Android relay enforces session authentication, local consent, role and rev
     p = message(phone);
     viewer.send(JSON.stringify({ type: "control", action: "front" }));
     assert.equal(JSON.parse((await p).data.toString()).action, "front");
+    // Authorized sharing continues beyond 15 minutes while credentials remain valid.
+    elapsed = 16 * 60000;
+    t.mock.timers.tick(10000);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    assert.equal(phone.readyState, WebSocket.OPEN);
+    assert.equal(viewer.readyState, WebSocket.OPEN);
+    p = message(viewer);
+    phone.send(frame);
+    assert((await p).data.equals(frame));
     await db.query("UPDATE devices SET revoked=true WHERE id=$1", [invite.id]);
     p = message(viewer);
     viewer.send(JSON.stringify({ type: "control", action: "rear" }));

@@ -105,7 +105,6 @@ public class ShareService extends Service {
                 null,
                 work);
       } else openCamera();
-      main.postDelayed(() -> end(), 15 * 60000);
     } catch (Exception e) {
       report("Não foi possível iniciar. Verifique as permissões no tablet.");
       end();
