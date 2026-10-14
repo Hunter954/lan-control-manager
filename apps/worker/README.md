@@ -1,0 +1,1 @@
+O scheduler da primeira versão roda no processo API a cada 15 segundos. Usa claims persistentes no PostgreSQL para não repetir o mesmo minuto e marca comandos vencidos como expired. Horário: America/Sao_Paulo; terça = 2. Um único serviço Railway reduz custo nesta etapa. Um worker separado pode chamar Service.tick sem mudar a fila, desde que a coordenação seja preservada.

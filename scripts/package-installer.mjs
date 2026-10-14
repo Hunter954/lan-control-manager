@@ -1,0 +1,11 @@
+import {zipSync} from 'fflate';
+import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
+import {join} from 'node:path';
+import {createHash} from 'node:crypto';
+const [bin,out]=process.argv.slice(2);mkdirSync(out,{recursive:true});
+const files={};
+for(const name of ['LANControl.Agent.exe','LANControl.Updater.exe'])files['bin/'+name]=new Uint8Array(readFileSync(join(bin,name)));
+for(const name of ['Install.ps1','Uninstall.ps1'])files[name]=new Uint8Array(readFileSync(join('installer',name)));
+const bytes=zipSync(files,{level:6});writeFileSync(join(out,'LANControl-Setup.zip'),bytes);
+writeFileSync(join(out,'LANControl-Setup.sha256'),createHash('sha256').update(bytes).digest('hex')+'  LANControl-Setup.zip\n');
+console.log('Windows installer packaged');

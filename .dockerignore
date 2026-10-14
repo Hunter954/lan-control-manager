@@ -1,0 +1,9 @@
+.git
+node_modules
+artifacts
+**/.next
+**/dist
+**/bin
+**/obj
+.env
+.env.local
